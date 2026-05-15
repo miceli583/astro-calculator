@@ -1,0 +1,30 @@
+                    GNU AFFERO GENERAL PUBLIC LICENSE
+                       Version 3, 19 November 2007
+
+ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+ Everyone is permitted to copy and distribute verbatim copies
+ of this license document, but changing it is not allowed.
+
+This project is licensed under the GNU Affero General Public License v3.0
+or any later version. The full license text is available at:
+
+  https://www.gnu.org/licenses/agpl-3.0.txt
+
+WHY AGPL?
+=========
+This project links to the Swiss Ephemeris library (sweph), which is itself
+distributed under AGPL-3.0. AGPL requires that any software that uses Swiss
+Ephemeris and is made available over a network (e.g., as a web API) must also
+be released under AGPL or a compatible license, with full source code
+available to all users of the network service.
+
+Astrodienst AG also offers a commercial license for Swiss Ephemeris that
+removes this requirement. If you wish to use this code in a closed-source
+network service, you must:
+
+  1. Obtain a commercial Swiss Ephemeris license from Astrodienst AG, AND
+  2. Replace AGPL components of this project with your own implementation, OR
+     fork and re-license under terms compatible with your commercial license.
+
+For details on the Swiss Ephemeris licensing model, see:
+  https://www.astro.com/swisseph/swephinfo_e.htm
