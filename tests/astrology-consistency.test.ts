@@ -7,15 +7,16 @@
 
 import { describe, it, expect } from "vitest";
 import { calculateNatalChart } from "@/lib/calculators/astrology";
-import { DIANA, EINSTEIN } from "./fixtures/charts";
+import { DIANA, EINSTEIN, JOBS } from "./fixtures/charts";
 
 function angularDistance(a: number, b: number): number {
   return Math.abs(((a - b + 540) % 360) - 180);
 }
 
 const charts = [
-  { name: "Diana",    chart: calculateNatalChart(DIANA.birth) },
-  { name: "Einstein", chart: calculateNatalChart(EINSTEIN.birth) },
+  { name: "Diana",    chart: calculateNatalChart(DIANA.birth),    birth: DIANA.birth },
+  { name: "Einstein", chart: calculateNatalChart(EINSTEIN.birth), birth: EINSTEIN.birth },
+  { name: "Jobs",     chart: calculateNatalChart(JOBS.birth),     birth: JOBS.birth },
 ];
 
 describe("chart invariants", () => {
@@ -32,7 +33,7 @@ describe("chart invariants", () => {
       });
 
       it("Placidus opposite-house cusps are 180° apart (2-8, 3-9, 5-11, 6-12)", () => {
-        const placidusChart = calculateNatalChart({ ...(name === "Diana" ? DIANA.birth : EINSTEIN.birth), house_system: "placidus" });
+        const placidusChart = calculateNatalChart({ ...(charts.find((c) => c.name === name)!.birth), house_system: "placidus" });
         for (const [i, j] of [[1, 7], [2, 8], [4, 10], [5, 11]] as const) {
           const d = angularDistance(placidusChart.houses.cusps[i].longitude, placidusChart.houses.cusps[j].longitude);
           expect(Math.abs(d - 180), `cusps ${i + 1} & ${j + 1}`).toBeLessThan(1 / 3600);
@@ -93,6 +94,79 @@ describe("chart invariants", () => {
       });
     });
   }
+});
+
+describe("high-latitude warnings", () => {
+  it("emits no warning for ordinary mid-latitude charts", () => {
+    const chart = calculateNatalChart(DIANA.birth);
+    expect(chart.warnings).toEqual([]);
+  });
+
+  it("warns for Placidus at 70°N", () => {
+    const chart = calculateNatalChart({
+      datetime: "1980-07-15T12:00:00",
+      timezone: "UTC",
+      latitude: 70,
+      longitude: 25,
+      house_system: "placidus",
+    });
+    expect(chart.warnings.length).toBeGreaterThan(0);
+    expect(chart.warnings[0]).toContain("polar circle");
+    expect(chart.warnings[0]).toContain("placidus");
+  });
+
+  it("warns for Koch at 70°S", () => {
+    const chart = calculateNatalChart({
+      datetime: "1980-01-15T12:00:00",
+      timezone: "UTC",
+      latitude: -70,
+      longitude: 0,
+      house_system: "koch",
+    });
+    expect(chart.warnings.length).toBeGreaterThan(0);
+    expect(chart.warnings[0]).toContain("koch");
+  });
+
+  it("does NOT warn for Whole-Sign at 80°N (sign-based systems work at any latitude)", () => {
+    const chart = calculateNatalChart({
+      datetime: "1980-07-15T12:00:00",
+      timezone: "UTC",
+      latitude: 80,
+      longitude: 0,
+      house_system: "whole_sign",
+    });
+    expect(chart.warnings).toEqual([]);
+  });
+
+  it("does NOT warn for Equal at 80°N", () => {
+    const chart = calculateNatalChart({
+      datetime: "1980-07-15T12:00:00",
+      timezone: "UTC",
+      latitude: 80,
+      longitude: 0,
+      house_system: "equal",
+    });
+    expect(chart.warnings).toEqual([]);
+  });
+
+  it("threshold is exactly 66.5° (Arctic Circle)", () => {
+    const just_below = calculateNatalChart({
+      datetime: "1980-07-15T12:00:00",
+      timezone: "UTC",
+      latitude: 66.4,
+      longitude: 0,
+      house_system: "placidus",
+    });
+    const just_above = calculateNatalChart({
+      datetime: "1980-07-15T12:00:00",
+      timezone: "UTC",
+      latitude: 66.6,
+      longitude: 0,
+      house_system: "placidus",
+    });
+    expect(just_below.warnings).toEqual([]);
+    expect(just_above.warnings.length).toBeGreaterThan(0);
+  });
 });
 
 describe("Diana — narrative house placements", () => {

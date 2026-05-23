@@ -10,7 +10,7 @@
 
 import { describe, it, expect } from "vitest";
 import { calculateNatalChart } from "@/lib/calculators/astrology";
-import { DIANA, EINSTEIN, J2000_NOON } from "./fixtures/charts";
+import { DIANA, EINSTEIN, JOBS, J2000_NOON } from "./fixtures/charts";
 
 /** Smallest angular distance on a circle. Returns 0..180. */
 function angularDistance(a: number, b: number): number {
@@ -58,6 +58,21 @@ describe("astrology — Albert Einstein planet positions", () => {
       const p = chart.planets.find((x) => x.name === planet);
       expect(p, `planet ${planet} not in chart`).toBeDefined();
       expectLongitudeClose(p!.longitude, exp.longitude, exp.tolDeg, `Einstein ${planet}`);
+      if (exp.retrograde !== undefined) {
+        expect(p!.retrograde, `${planet} retrograde flag`).toBe(exp.retrograde);
+      }
+    });
+  }
+});
+
+describe("astrology — Steve Jobs planet positions", () => {
+  const chart = calculateNatalChart(JOBS.birth);
+
+  for (const [planet, exp] of Object.entries(JOBS.expected.planets)) {
+    it(`${planet}: matches Astrodienst within ±${(exp.tolDeg * 60).toFixed(1)}'`, () => {
+      const p = chart.planets.find((x) => x.name === planet);
+      expect(p, `planet ${planet} not in chart`).toBeDefined();
+      expectLongitudeClose(p!.longitude, exp.longitude, exp.tolDeg, `Jobs ${planet}`);
       if (exp.retrograde !== undefined) {
         expect(p!.retrograde, `${planet} retrograde flag`).toBe(exp.retrograde);
       }

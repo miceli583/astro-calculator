@@ -243,6 +243,29 @@ function definitionType(
 
 export interface HumanDesignInput extends BirthData {}
 
+/**
+ * Compute a Human Design body graph from birth data.
+ *
+ * Returns the BodyGraph: Type (Manifestor/Generator/MG/Projector/Reflector),
+ * Strategy, Authority, Profile (e.g. "5/1"), Definition, defined and undefined
+ * Centers, defined Channels, the Incarnation Cross, and both halves of the
+ * chart (Personality at birth + Design 88° of solar arc earlier).
+ *
+ * Gate-wheel anchor: Gate 41 starts at 2°00' Aquarius (the Rave Mandala
+ * convention used by Jovian Archive's official software).
+ *
+ * Note: HD output depends only on the birth instant in UT — `latitude` and
+ * `longitude` in the BirthData input are accepted for API consistency but
+ * not used in any HD calculation.
+ *
+ * @example
+ *   calculateHumanDesign({
+ *     datetime: "1961-07-01T19:45:00",
+ *     timezone: "Europe/London",
+ *     latitude: 52.833,
+ *     longitude: 0.5,
+ *   });
+ */
 export function calculateHumanDesign(input: HumanDesignInput): HumanDesignChart {
   const personalityJd = julianDayUT(input.datetime, input.timezone);
   const birthSun = calcPlanet(personalityJd, "sun");

@@ -91,11 +91,12 @@ export const DIANA: ChartFixture = {
       neptune:    { longitude: dms("Scorpio", 8, 38),  tolDeg: TOL_OUTER_PLANET, retrograde: true },
       pluto:      { longitude: dms("Virgo", 6, 2),     tolDeg: TOL_OUTER_PLANET },
       true_node:  { longitude: dms("Leo", 28, 16),     tolDeg: TOL_NODE },
-      // Chiron deliberately omitted: its published longitude for this chart
-      // varies meaningfully between sources because Chiron's orbital model
-      // has been refined multiple times since the 1970s and different
-      // ephemeris files give different values. Chiron retrograde flag and
-      // structural correctness are exercised in astrology-consistency tests.
+      // Chiron's longitude is sensitive to the ephemeris model. We use the
+      // current Astrodienst-published value (which itself uses Swiss
+      // Ephemeris), accepting that books or older charts may quote a
+      // different degree by up to ~30'. Diana's Chiron is Pisces 6°28'
+      // (= 336.47°) per current sweph.
+      chiron:     { longitude: dms("Pisces", 6, 28),   tolDeg: TOL_CHIRON, retrograde: true },
     },
     angles: {
       ascendant: { longitude: dms("Sagittarius", 18, 24), tolDeg: TOL_ANGLE },
@@ -228,4 +229,59 @@ export const J2000_NOON: ChartFixture = {
   },
 };
 
-export const FIXTURES = [DIANA, EINSTEIN];
+/**
+ * Steve Jobs.
+ * Source: Astrodatabank, Rodden Rating B (timed, biographer-sourced).
+ * https://www.astro.com/astro-databank/Jobs,_Steve
+ *
+ * 24 February 1955, 19:15 PST, San Francisco, CA
+ * Latitude:  37°46'N
+ * Longitude: 122°25'W
+ *
+ * PST = UT - 8h, so birth was 1955-02-25 03:15 UT.
+ */
+export const JOBS: ChartFixture = {
+  name: "Steve Jobs",
+  notes: "AA-source for ASC/MC; B-rated birth time gives ±1' typical agreement on angles",
+  birth: {
+    datetime: "1955-02-24T19:15:00",
+    timezone: "America/Los_Angeles",
+    latitude: 37 + 46 / 60,
+    longitude: -(122 + 25 / 60),
+  },
+  expected: {
+    planets: {
+      sun:       { longitude: dms("Pisces", 5, 45),    tolDeg: TOL_SUN },
+      moon:      { longitude: dms("Aries", 7, 45),     tolDeg: TOL_MOON },
+      mercury:   { longitude: dms("Aquarius", 14, 22), tolDeg: TOL_INNER_PLANET, retrograde: true },
+      venus:     { longitude: dms("Capricorn", 21, 10), tolDeg: TOL_INNER_PLANET },
+      mars:      { longitude: dms("Aries", 29, 5),     tolDeg: TOL_INNER_PLANET },
+      jupiter:   { longitude: dms("Cancer", 20, 30),   tolDeg: TOL_OUTER_PLANET, retrograde: true },
+      saturn:    { longitude: dms("Scorpio", 21, 10),  tolDeg: TOL_OUTER_PLANET },
+      uranus:    { longitude: dms("Cancer", 24, 8),    tolDeg: TOL_OUTER_PLANET, retrograde: true },
+      neptune:   { longitude: dms("Libra", 28, 3),     tolDeg: TOL_OUTER_PLANET, retrograde: true },
+      pluto:     { longitude: dms("Leo", 25, 19),      tolDeg: TOL_OUTER_PLANET, retrograde: true },
+      true_node: { longitude: dms("Capricorn", 3, 25), tolDeg: TOL_NODE, retrograde: true },
+    },
+    angles: {
+      ascendant: { longitude: dms("Virgo", 22, 18), tolDeg: TOL_ANGLE },
+      midheaven: { longitude: dms("Gemini", 21, 19), tolDeg: TOL_ANGLE },
+    },
+    placidusCusps: [
+      { longitude: dms("Virgo", 22, 18),    tolDeg: TOL_ANGLE },             // 1 (ASC)
+      { longitude: dms("Libra", 18, 15),    tolDeg: TOL_CUSP_INTERMEDIATE }, // 2
+      { longitude: dms("Scorpio", 18, 21),  tolDeg: TOL_CUSP_INTERMEDIATE }, // 3
+      { longitude: dms("Sagittarius", 21, 19), tolDeg: TOL_ANGLE },          // 4 (IC)
+      { longitude: dms("Capricorn", 24, 28), tolDeg: TOL_CUSP_INTERMEDIATE },// 5
+      { longitude: dms("Aquarius", 25, 13), tolDeg: TOL_CUSP_INTERMEDIATE }, // 6
+      { longitude: dms("Pisces", 22, 18),   tolDeg: TOL_ANGLE },             // 7 (DSC)
+      { longitude: dms("Aries", 18, 15),    tolDeg: TOL_CUSP_INTERMEDIATE }, // 8
+      { longitude: dms("Taurus", 18, 21),   tolDeg: TOL_CUSP_INTERMEDIATE }, // 9
+      { longitude: dms("Gemini", 21, 19),   tolDeg: TOL_ANGLE },             // 10 (MC)
+      { longitude: dms("Cancer", 24, 28),   tolDeg: TOL_CUSP_INTERMEDIATE }, // 11
+      { longitude: dms("Leo", 25, 13),      tolDeg: TOL_CUSP_INTERMEDIATE }, // 12
+    ],
+  },
+};
+
+export const FIXTURES = [DIANA, EINSTEIN, JOBS];

@@ -8,7 +8,7 @@
 
 import { describe, it, expect } from "vitest";
 import { calculateNatalChart } from "@/lib/calculators/astrology";
-import { DIANA } from "./fixtures/charts";
+import { DIANA, JOBS } from "./fixtures/charts";
 
 function angularDistance(a: number, b: number): number {
   return Math.abs(((a - b + 540) % 360) - 180);
@@ -53,6 +53,49 @@ describe("Diana — Placidus house cusps and angles vs Astrodienst", () => {
 
   for (let i = 0; i < 12; i++) {
     const exp = DIANA.expected.placidusCusps[i];
+    it(`Cusp ${i + 1} ≈ ${fmt(exp.longitude)}`, () => {
+      const cusp = chart.houses.cusps[i];
+      const d = angularDistance(cusp.longitude, exp.longitude);
+      if (d > exp.tolDeg) {
+        throw new Error(
+          `Cusp ${i + 1}: got ${fmt(cusp.longitude)} (${cusp.longitude.toFixed(4)}°), ` +
+          `expected ${fmt(exp.longitude)}, offset ${(d * 60).toFixed(1)}'`
+        );
+      }
+      expect(d).toBeLessThanOrEqual(exp.tolDeg);
+    });
+  }
+});
+
+describe("Steve Jobs — Placidus house cusps and angles vs Astrodienst", () => {
+  const chart = calculateNatalChart({ ...JOBS.birth, house_system: "placidus" });
+
+  it(`Ascendant ≈ ${fmt(JOBS.expected.angles.ascendant.longitude)}`, () => {
+    const exp = JOBS.expected.angles.ascendant;
+    const d = angularDistance(chart.houses.ascendant.longitude, exp.longitude);
+    if (d > exp.tolDeg) {
+      throw new Error(
+        `ASC: got ${fmt(chart.houses.ascendant.longitude)} (${chart.houses.ascendant.longitude.toFixed(4)}°), ` +
+        `expected ${fmt(exp.longitude)}, offset ${(d * 60).toFixed(1)}'`
+      );
+    }
+    expect(d).toBeLessThanOrEqual(exp.tolDeg);
+  });
+
+  it(`Midheaven ≈ ${fmt(JOBS.expected.angles.midheaven.longitude)}`, () => {
+    const exp = JOBS.expected.angles.midheaven;
+    const d = angularDistance(chart.houses.midheaven.longitude, exp.longitude);
+    if (d > exp.tolDeg) {
+      throw new Error(
+        `MC: got ${fmt(chart.houses.midheaven.longitude)} (${chart.houses.midheaven.longitude.toFixed(4)}°), ` +
+        `expected ${fmt(exp.longitude)}, offset ${(d * 60).toFixed(1)}'`
+      );
+    }
+    expect(d).toBeLessThanOrEqual(exp.tolDeg);
+  });
+
+  for (let i = 0; i < 12; i++) {
+    const exp = JOBS.expected.placidusCusps[i];
     it(`Cusp ${i + 1} ≈ ${fmt(exp.longitude)}`, () => {
       const cusp = chart.houses.cusps[i];
       const d = angularDistance(cusp.longitude, exp.longitude);

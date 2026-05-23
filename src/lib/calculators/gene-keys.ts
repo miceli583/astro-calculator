@@ -97,6 +97,20 @@ function sphere(name: string, source: string, a: GateActivation): Sphere {
   return { name, source, gate: a.gate, line: a.line };
 }
 
+/**
+ * Compute a Gene Keys profile (Richard Rudd's system) from birth data.
+ *
+ * Returns three sequences derived from the same 64-gate wheel used by Human Design:
+ *   - Activation Sequence (4 spheres): Life's Work, Evolution, Radiance, Purpose
+ *   - Venus Sequence (6 spheres): Attraction, IQ, EQ, SQ, Core, Wound
+ *   - Pearl Sequence (3 spheres): Vocation, Culture, Brand
+ *
+ * The "Design" moment is the same as HD's: when the Sun was 88° behind its
+ * birth longitude (~88 calendar days earlier).
+ *
+ * Note: GK output depends only on the birth instant in UT — `latitude` and
+ * `longitude` are accepted for API consistency but not used.
+ */
 export function calculateGeneKeys(input: BirthData): GeneKeysProfile {
   const pJd = julianDayUT(input.datetime, input.timezone);
   const sunLong = calcPlanet(pJd, "sun").longitude;

@@ -55,10 +55,14 @@ function mcLongitude(ra: number, gstDeg: number): number {
 }
 
 // AC/DC sinusoidal line.
-// For each latitude φ, the planet is rising/setting when:
+// For each latitude φ, the planet is rising/setting when its altitude = 0:
 //   cos(H) = -tan(φ) * tan(δ)
-// where H is the local hour angle. AC: H = -arccos(...), DC: H = +arccos(...).
-// Local longitude = ra - GST - H.
+// where H = LST - RA is the local hour angle. The planet rises BEFORE meridian
+// transit (H < 0, planet still east of meridian) and sets AFTER (H > 0).
+// Solving for longitude: H = LST - RA = GST + lon - RA, so lon = RA + H - GST.
+//
+// AC (rising):  H = -arccos(cosH)  →  lon = RA - arccos(cosH) - GST
+// DC (setting): H = +arccos(cosH)  →  lon = RA + arccos(cosH) - GST
 function angleLineLongitude(
   ra: number,
   dec: number,
@@ -72,7 +76,7 @@ function angleLineLongitude(
   if (cosH < -1 || cosH > 1) return null; // never rises/sets at this latitude
   const H = Math.acos(cosH) * DEG; // 0–180
   const hourAngle = side === "AC" ? -H : H;
-  return normalizeLon(ra - gstDeg - hourAngle);
+  return normalizeLon(ra + hourAngle - gstDeg);
 }
 
 export interface AstroInput extends BirthData {
@@ -85,6 +89,25 @@ export interface AstroInput extends BirthData {
   max_latitude?: number;
 }
 
+/**
+ * Compute astrocartography lines for each requested planet.
+ *
+ * For each planet, returns four planetary lines on Earth's surface:
+ *   - MC: vertical line of longitudes where the planet is at the upper meridian.
+ *   - IC: 180° from MC; planet at the lower meridian.
+ *   - AC: curve of (lat, lon) where the planet is on the local eastern horizon (rising).
+ *   - DC: curve of (lat, lon) where the planet is on the local western horizon (setting).
+ *
+ * The birth lat/lon are not used by the line calculations — only the UT
+ * moment matters — but they're accepted so a caller can pass a single
+ * birth-data object.
+ *
+ * @param input.datetime, timezone   Birth instant (UT used internally).
+ * @param input.planets              Optional subset (defaults to sun..pluto).
+ * @param input.latitude_step        Sampling step in degrees for AC/DC curves (default 1).
+ * @param input.min_latitude         Lower bound of AC/DC sampling (default -85).
+ * @param input.max_latitude         Upper bound of AC/DC sampling (default 85).
+ */
 export function calculateAstrocartography(input: AstroInput): AstrocartographyResult {
   const jd = julianDayUT(input.datetime, input.timezone);
   const gst = greenwichSiderealTimeDeg(jd);

@@ -194,6 +194,25 @@ describe("HD design-time calculation", () => {
   });
 });
 
+describe("HD output is invariant to latitude/longitude (depends only on UT)", () => {
+  it("Diana's HD chart is identical at her birth lat/lon and at (0,0)", () => {
+    const here = calculateHumanDesign(DIANA.birth);
+    const there = calculateHumanDesign({ ...DIANA.birth, latitude: 0, longitude: 0 });
+    expect(there.type).toBe(here.type);
+    expect(there.authority).toBe(here.authority);
+    expect(there.profile).toBe(here.profile);
+    expect(there.definition).toBe(here.definition);
+    expect(there.definedCenters.sort()).toEqual(here.definedCenters.sort());
+    expect(there.incarnationCross.gates).toEqual(here.incarnationCross.gates);
+    expect(there.channels.length).toBe(here.channels.length);
+    // Activations should match gate-for-gate
+    for (let i = 0; i < here.personality.activations.length; i++) {
+      expect(there.personality.activations[i].gate).toBe(here.personality.activations[i].gate);
+      expect(there.personality.activations[i].line).toBe(here.personality.activations[i].line);
+    }
+  });
+});
+
 describe("HD across multiple births — type and authority are valid", () => {
   const births = [
     { ...DIANA.birth, label: "Diana" },
