@@ -4,12 +4,16 @@
 // "Mandala" order. Each gate occupies 360°/64 = 5.625° (5°37'30").
 // Each gate is divided into 6 lines of 56'15" each.
 //
-// IMPORTANT — verify the wheel offset against known charts before relying on
-// gate output for production. The offset varies slightly across published
-// sources (3.875°, 13.875°, etc.). Run tests against a verified chart
-// (e.g. jovianarchive.com or a known birth) and adjust GATE_WHEEL_OFFSET.
+// Convention used here matches Ra Uru Hu / Jovian Archive's Rave Mandala:
+//   Gate 41 begins at 2°00' Aquarius (= 302.0° tropical).
+// With Gate 41 at index 54 in GATE_SEQUENCE (54 × 5.625° = 303.75° in wheel
+// coordinates), the offset that maps wheel 303.75° → tropical 302° is:
+//   GATE_WHEEL_OFFSET = 302 − 303.75 = −1.75°, equivalently 358.25°.
+// Equivalently: Gate 25 (index 0) begins at 358.25° tropical = 28°15' Pisces.
 //
-// Convention used here: Gate 25 begins at 3°52'30" Aries (= 3.875° tropical).
+// Verified against multiple independent open-source HD implementations
+// (nimblemo/Human-Design-cli, zalziadi/taamun-mvp, unforced/starchart) which
+// all use this offset corresponding to "Gate 41 at 302° / 2° Aquarius".
 
 export const GATE_SIZE_DEG = 360 / 64; // 5.625°
 export const LINE_SIZE_DEG = GATE_SIZE_DEG / 6; // 0.9375°
@@ -17,7 +21,7 @@ export const COLOR_SIZE_DEG = LINE_SIZE_DEG / 6; // 0.15625°
 export const TONE_SIZE_DEG = COLOR_SIZE_DEG / 6;
 export const BASE_SIZE_DEG = TONE_SIZE_DEG / 5;
 
-export const GATE_WHEEL_OFFSET = 3.875; // degrees east of 0° Aries
+export const GATE_WHEEL_OFFSET = 358.25; // = 28°15' Pisces; Gate 41 starts at 2°00' Aquarius
 
 // 64 gates in tropical zodiac order, starting from Aries (offset by GATE_WHEEL_OFFSET).
 export const GATE_SEQUENCE: readonly number[] = [

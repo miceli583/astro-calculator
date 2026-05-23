@@ -2,22 +2,18 @@
 
 ## Critical (blocks production)
 
-- [ ] @Matt: Validate calculator output against reference charts — pick 2-3 known birth charts (e.g. from jovianarchive.com, Richard Rudd's site, AstroDienst) and compare:
-  - Astrology natal positions (should match Astro.com to within 1')
-  - HD type / profile / channels (should match jovianarchive.com)
-  - Gene Keys Activation Sequence gates (should match Richard Rudd profile)
-- [ ] Tune `GATE_WHEEL_OFFSET` in `src/lib/constants/hd-gates.ts` if HD output doesn't match reference
 - [ ] Verify Swiss Ephemeris file paths resolve when deployed to Vercel (test preview deploy)
+- [ ] Verify Astrocartography line latitudes match Astrodienst's published map lines for at least 1 reference chart
 
 ## Bugs (broken functionality)
 
-- [ ] None known (pre-validation)
+- [ ] None known
 
 ## Tech Debt (code quality)
 
-- [ ] Extract magic numbers in HD calculator (88° solar arc, gate boundaries) into named constants
 - [ ] Add JSDoc on public calculator entry points
 - [ ] `vercel.ts` imports `@vercel/config` — confirm Vercel's build picks this up (it's a devDep)
+- [ ] HD/GK warning for latitudes above ~66°N/S where Placidus cusps become undefined
 
 ## Enhancements (nice to have)
 
@@ -31,3 +27,5 @@
 - [ ] Caching layer (in-memory LRU + Vercel Runtime Cache)
 - [ ] Rate limiting via Vercel Firewall WAF rules
 - [ ] SDK packages (@astro-calculator/client-ts, py)
+- [ ] Add a 3rd reference birth chart (current: Princess Diana + Einstein)
+- [ ] Verify Chiron output for Diana against an authoritative source (Chiron varies by ephemeris)
