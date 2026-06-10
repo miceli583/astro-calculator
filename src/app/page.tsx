@@ -48,19 +48,6 @@ export default function Home() {
           >
             Generate a chart →
           </a>
-          <a
-            href="/docs"
-            style={{
-              display: "inline-block",
-              border: "1px solid var(--border)",
-              color: "var(--fg)",
-              padding: "0.6rem 1.2rem",
-              borderRadius: 8,
-              fontSize: 14,
-            }}
-          >
-            Interactive API docs
-          </a>
         </div>
       </header>
 
