@@ -46,6 +46,7 @@
 
 | Date       | Author          | Change                                                                                                                                           |
 | ---------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-06-09 | Matthew Miceli  | Push to GitHub (miceli583/astro-calculator); city autocomplete with Nominatim + tz-lookup; geocoder endpoint; Einstein default sample; Vercel deploy fixes in progress |
 | 2026-06-09 | Matthew Miceli  | Add parans, Solar Return, Progressions, Part of Fortune, South Node, Black Moon Lilith, HD Variables; fix IC angle + Gene Keys + Destiny Cards; new /chart UI page; quality audit sweep |
 | 2026-05-22 | Matthew Miceli  | Astrocartography AC/DC swap fix; Jobs fixture; high-latitude warnings; full JSDoc; 200→289 tests                                                  |
 | 2026-05-22 | Matthew Miceli  | Comprehensive accuracy test suite (13→200 tests); HD gate offset fixed                                                                            |

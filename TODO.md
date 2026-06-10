@@ -2,7 +2,7 @@
 
 ## Critical (blocks production)
 
-- [ ] Verify Swiss Ephemeris file paths resolve when deployed to Vercel (test preview deploy)
+- [ ] Vercel: confirm calculator endpoints return JSON on production. Repo pushed to github.com/miceli583/astro-calculator and connected to Vercel. Endpoints currently return HTML. Check function logs in Vercel dashboard — if "Ephemeris data directory not found" appears, the new error message lists every path tried. If sweph fails to load, may need a Vercel-specific build hook to rebuild the native module.
 
 ## Bugs (broken functionality)
 
@@ -29,5 +29,4 @@
 - [ ] Rate limiting via Vercel Firewall WAF rules
 - [ ] SDK packages (`@astro-calculator/client-ts`, Python)
 - [ ] Add a 4th reference birth chart fixture (current: Diana, Einstein, Jobs)
-- [ ] Geocoding for `/chart` UI — let users type a city name instead of lat/lon
 - [ ] Render astrocartography lines on an interactive world map in `/chart`
