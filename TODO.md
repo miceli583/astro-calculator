@@ -10,7 +10,6 @@
 
 ## Tech Debt (code quality)
 
-- [ ] `vercel.ts` imports `@vercel/config` — confirm Vercel's build picks this up (devDep); appears unused — consider removing
 - [ ] Migrate from `next lint` (deprecated in Next 16) to direct `eslint .` command
 - [ ] Add CI workflow (`.github/workflows/`) running typecheck + test + lint on PR
 - [ ] Add CHANGELOG.md before public launch
