@@ -63,7 +63,9 @@ export const transitInputSchema = z.object({
 });
 
 export const progressedInputSchema = birthDataSchema.extend({
-  years: z.number().min(0).max(120),
+  // Symbolic "day for a year" — accepting up to 200 years covers any human
+  // lifespan plus generous headroom for historical-figure charts.
+  years: z.number().min(0).max(200),
   planets: z.array(planetEnum).optional(),
 });
 

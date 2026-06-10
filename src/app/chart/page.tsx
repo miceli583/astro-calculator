@@ -67,7 +67,22 @@ async function callApi<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   const j = await r.json();
-  if (!r.ok || j.error) throw new Error(j.error?.message ?? "API error");
+  if (!r.ok || j.error) {
+    // Surface field-level validation details when present.
+    const baseMsg = j.error?.message ?? "API error";
+    const details = j.error?.details;
+    let extra = "";
+    if (details && typeof details === "object") {
+      const fieldErrors = (details as { fieldErrors?: Record<string, string[]> }).fieldErrors;
+      if (fieldErrors) {
+        const issues = Object.entries(fieldErrors)
+          .map(([field, msgs]) => `${field}: ${msgs.join(", ")}`)
+          .join(" · ");
+        if (issues) extra = ` — ${issues}`;
+      }
+    }
+    throw new Error(`${path.split("/").pop()}: ${baseMsg}${extra}`);
+  }
   return j.data as T;
 }
 
@@ -175,7 +190,11 @@ export default function ChartPage() {
       const lon = parseFloat(form.longitude);
       const birth = { datetime, timezone: form.timezone, latitude: lat, longitude: lon };
       const natalBody = { ...birth, house_system: "placidus", planets: ["sun", "moon", "mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune", "pluto", "true_node", "chiron", "mean_lilith"] };
-      const progBody = { ...birth, years: Math.max(0, new Date().getFullYear() - parseInt(form.date.slice(0, 4))) };
+      const rawAge = new Date().getFullYear() - parseInt(form.date.slice(0, 4));
+      // Cap progressions at 100 years — that's the most a "day for a year"
+      // chart sensibly represents; older historical figures still get a
+      // meaningful read at age 100. Negative ages (future birthdays) clamp to 0.
+      const progBody = { ...birth, years: Math.max(0, Math.min(rawAge, 100)) };
       const srBody = { natal: { ...birth, house_system: "placidus" }, year: new Date().getFullYear() };
       const dateBody = { date: form.date };
 
