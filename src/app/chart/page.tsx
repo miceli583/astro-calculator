@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type {
   Aspect,
   NatalChart,
@@ -88,48 +88,80 @@ export default function ChartPage() {
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoOptions, setGeoOptions] = useState<GeocodeResult[]>([]);
   const [geoError, setGeoError] = useState<string | null>(null);
+  const [geoOpen, setGeoOpen] = useState(false);
+  const lastQueryRef = useRef<string>("");
+  const cityFieldRef = useRef<HTMLDivElement>(null);
+
+  // Click outside the city combobox closes the dropdown.
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (!cityFieldRef.current) return;
+      if (!cityFieldRef.current.contains(e.target as Node)) setGeoOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const update = (k: keyof BirthForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm({ ...form, [k]: e.target.value });
+    setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  async function handleGeocode(e: FormEvent) {
-    e.preventDefault();
-    if (!placeQuery.trim()) return;
+  // Debounced autocomplete: fire 300ms after the user stops typing, when the
+  // query is at least 3 characters and hasn't already been resolved.
+  useEffect(() => {
+    const q = placeQuery.trim();
+    if (q.length < 3) {
+      setGeoOptions([]);
+      setGeoError(null);
+      return;
+    }
+    if (q === lastQueryRef.current) return;
+    const handle = setTimeout(() => {
+      lastQueryRef.current = q;
+      runGeocode(q);
+    }, 300);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeQuery]);
+
+  async function runGeocode(q: string) {
     setGeoError(null);
-    setGeoOptions([]);
     setGeoLoading(true);
     try {
       const r = await fetch("/api/v1/geocode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: placeQuery, limit: 5 }),
+        body: JSON.stringify({ query: q, limit: 6 }),
       });
       const j = await r.json();
+      // Stale-response guard: if the user kept typing while this request was
+      // in flight, drop the result on the floor.
+      if (lastQueryRef.current !== q) return;
       if (!r.ok || j.error) throw new Error(j.error?.message ?? "Geocoder error");
       const results = (j.data?.results ?? []) as GeocodeResult[];
-      if (results.length === 0) {
-        setGeoError("No matches. Try a different spelling.");
-      } else if (results.length === 1) {
-        applyGeocoded(results[0]);
-      } else {
-        setGeoOptions(results);
-      }
+      setGeoOptions(results);
+      setGeoOpen(true);
+      if (results.length === 0) setGeoError("No matches. Try a different spelling.");
     } catch (err) {
-      setGeoError(err instanceof Error ? err.message : String(err));
+      if (lastQueryRef.current === q) {
+        setGeoError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setGeoLoading(false);
+      if (lastQueryRef.current === q) setGeoLoading(false);
     }
   }
 
   function applyGeocoded(g: GeocodeResult) {
-    setForm({
-      ...form,
+    setForm((f) => ({
+      ...f,
       latitude: g.latitude.toFixed(4),
       longitude: g.longitude.toFixed(4),
       timezone: g.timezone,
-    });
-    setGeoOptions([]);
+    }));
     setPlaceQuery(g.display_name);
+    lastQueryRef.current = g.display_name;
+    setGeoOptions([]);
+    setGeoOpen(false);
+    setGeoError(null);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -194,71 +226,84 @@ export default function ChartPage() {
           <Field label="Birth time (24h)">
             <input type="time" value={form.time} onChange={update("time")} required />
           </Field>
-          <Field label="Birthplace (city) — fills lat/lon + timezone" full>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+          <Field label="Birthplace (city) — auto-fills lat/lon + timezone as you type" full>
+            <div ref={cityFieldRef} style={{ position: "relative" }}>
               <input
                 type="text"
                 value={placeQuery}
-                onChange={(e) => { setPlaceQuery(e.target.value); setGeoError(null); }}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleGeocode(e as unknown as FormEvent); } }}
-                placeholder='e.g. "New Orleans, LA" or "Berlin, Germany"'
-                style={{ flex: 1 }}
-              />
-              <button
-                type="button"
-                onClick={handleGeocode}
-                disabled={geoLoading || !placeQuery.trim()}
-                style={{
-                  background: "transparent",
-                  color: "var(--accent)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 7,
-                  padding: "0.55rem 1.1rem",
-                  cursor: geoLoading ? "wait" : "pointer",
-                  opacity: geoLoading || !placeQuery.trim() ? 0.5 : 1,
-                  fontSize: 14,
-                  minHeight: 44,
-                  whiteSpace: "nowrap",
+                onChange={(e) => setPlaceQuery(e.target.value)}
+                onFocus={() => { if (geoOptions.length > 0) setGeoOpen(true); }}
+                onKeyDown={(e) => {
+                  // Don't let Enter submit the outer form while user is typing in
+                  // the city search; instead, pick the first result if open.
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (geoOpen && geoOptions.length > 0) applyGeocoded(geoOptions[0]);
+                  } else if (e.key === "Escape") {
+                    setGeoOpen(false);
+                  }
                 }}
-              >
-                {geoLoading ? "Searching…" : "Find"}
-              </button>
+                placeholder='Start typing — e.g. "New Orleans" or "Berlin"'
+                aria-autocomplete="list"
+                aria-controls="geo-listbox"
+                aria-expanded={geoOpen && geoOptions.length > 0}
+              />
+              {geoLoading && (
+                <div aria-hidden="true" style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "var(--muted)" }}>
+                  searching…
+                </div>
+              )}
+              {geoOpen && geoOptions.length > 0 && (
+                <div
+                  id="geo-listbox"
+                  role="listbox"
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 4px)",
+                    left: 0,
+                    right: 0,
+                    zIndex: 20,
+                    background: "var(--code-bg)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 7,
+                    overflow: "hidden",
+                    maxHeight: 280,
+                    overflowY: "auto",
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                  }}
+                >
+                  {geoOptions.map((g, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      role="option"
+                      aria-selected={false}
+                      onClick={() => applyGeocoded(g)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        background: "transparent",
+                        border: 0,
+                        color: "var(--fg)",
+                        padding: "0.6rem 0.75rem",
+                        borderTop: i === 0 ? "0" : "1px solid var(--border)",
+                        cursor: "pointer",
+                        fontSize: 13,
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      {g.display_name}
+                      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2, fontFamily: "ui-monospace, monospace" }}>
+                        {g.latitude.toFixed(4)}, {g.longitude.toFixed(4)} · {g.timezone}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             {geoError && (
               <div role="alert" style={{ color: "#ff6b6b", fontSize: 12, marginTop: 6 }}>{geoError}</div>
-            )}
-            {geoOptions.length > 0 && (
-              <div role="listbox" style={{ marginTop: 6, background: "var(--code-bg)", border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden" }}>
-                <div style={{ padding: "0.4rem 0.7rem", fontSize: 11, color: "var(--muted)", letterSpacing: "0.05em", textTransform: "uppercase", borderBottom: "1px solid var(--border)" }}>
-                  {geoOptions.length} matches — pick one
-                </div>
-                {geoOptions.map((g, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    role="option"
-                    onClick={() => applyGeocoded(g)}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      textAlign: "left",
-                      background: "transparent",
-                      border: 0,
-                      color: "var(--fg)",
-                      padding: "0.6rem 0.7rem",
-                      borderTop: i === 0 ? "0" : "1px solid var(--border)",
-                      cursor: "pointer",
-                      fontSize: 13,
-                      fontFamily: "inherit",
-                    }}
-                  >
-                    {g.display_name}
-                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2, fontFamily: "ui-monospace, monospace" }}>
-                      {g.latitude.toFixed(4)}, {g.longitude.toFixed(4)} · {g.timezone}
-                    </div>
-                  </button>
-                ))}
-              </div>
             )}
           </Field>
           <Field label="Timezone (IANA)" full>
