@@ -3,7 +3,8 @@
 // calculators don't need to know about flag bitmasks.
 
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { parseLocalISO, toUTC, type ParsedDateTime } from "./julian-day";
 
@@ -12,17 +13,54 @@ const require = createRequire(import.meta.url);
 // sweph is a native CommonJS module; require lazily to keep tooling happy.
 type SwephModule = typeof import("sweph");
 let _swe: SwephModule | null = null;
+let _ephePath: string | null = null;
+
+/**
+ * Resolve the Swiss Ephemeris data directory.
+ *
+ * In dev/local, `./ephemeris/` relative to the project root is always present.
+ * On Vercel, `process.cwd()` is `/var/task` and the directory is bundled in
+ * via `outputFileTracingIncludes` — but historically that ends up either at
+ * `/var/task/ephemeris` or nested under `/var/task/.next/server`, depending
+ * on the build. We try every plausible location and fail loudly if none hit.
+ */
+function findEphemerisPath(): string {
+  if (_ephePath) return _ephePath;
+
+  const envPath = process.env.EPHEMERIS_PATH;
+  const thisFileDir = (() => {
+    try { return dirname(fileURLToPath(import.meta.url)); }
+    catch { return null; }
+  })();
+
+  const candidates = [
+    envPath,
+    resolve(process.cwd(), "ephemeris"),
+    "/var/task/ephemeris",
+    thisFileDir && resolve(thisFileDir, "../../../ephemeris"),
+    thisFileDir && resolve(thisFileDir, "../../../../ephemeris"),
+    thisFileDir && resolve(thisFileDir, "../../../../../ephemeris"),
+    resolve(process.cwd(), ".next/server/ephemeris"),
+    resolve(process.cwd(), ".next/standalone/ephemeris"),
+  ].filter((p): p is string => Boolean(p));
+
+  for (const c of candidates) {
+    if (existsSync(c)) {
+      _ephePath = c;
+      return c;
+    }
+  }
+
+  throw new Error(
+    `Swiss Ephemeris data directory not found. cwd=${process.cwd()} ` +
+      `tried: ${candidates.join(" | ")}`
+  );
+}
 
 function getSwe(): SwephModule {
   if (_swe) return _swe;
+  const path = findEphemerisPath();
   _swe = require("sweph") as SwephModule;
-  const path = resolve(process.env.EPHEMERIS_PATH ?? "ephemeris");
-  if (!existsSync(path)) {
-    throw new Error(
-      `Swiss Ephemeris data path not found: ${path}. ` +
-        `Run \`npm run ephe:download\` to fetch the data files.`
-    );
-  }
   _swe.set_ephe_path(path);
   return _swe;
 }
