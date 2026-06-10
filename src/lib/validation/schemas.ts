@@ -67,6 +67,11 @@ export const progressedInputSchema = birthDataSchema.extend({
   planets: z.array(planetEnum).optional(),
 });
 
+export const geocodeInputSchema = z.object({
+  query: z.string().min(2).max(200),
+  limit: z.number().int().min(1).max(10).optional(),
+});
+
 export const solarReturnInputSchema = z.object({
   natal: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
   year: z.number().int().min(1500).max(3500),

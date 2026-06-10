@@ -40,13 +40,16 @@ interface ChartResults {
   solarReturn: SolarReturnChart;
 }
 
+// Default sample uses a public historical figure (Einstein) so users can
+// click "Generate" immediately without entering data. Pick a different name
+// to clear and enter your own.
 const SAMPLE: BirthForm = {
-  name: "Matthew Miceli",
-  date: "1998-04-08",
-  time: "06:30",
-  timezone: "America/Chicago",
-  latitude: "29.9511",
-  longitude: "-90.0715",
+  name: "Albert Einstein",
+  date: "1879-03-14",
+  time: "11:30",
+  timezone: "Europe/Berlin",
+  latitude: "48.4011",
+  longitude: "9.9876",
 };
 
 const COMMON_TIMEZONES = [
@@ -68,14 +71,66 @@ async function callApi<T>(path: string, body: unknown): Promise<T> {
   return j.data as T;
 }
 
+interface GeocodeResult {
+  display_name: string;
+  latitude: number;
+  longitude: number;
+  timezone: string;
+}
+
 export default function ChartPage() {
   const [form, setForm] = useState<BirthForm>(SAMPLE);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ChartResults | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoOptions, setGeoOptions] = useState<GeocodeResult[]>([]);
+  const [geoError, setGeoError] = useState<string | null>(null);
+
   const update = (k: keyof BirthForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm({ ...form, [k]: e.target.value });
+
+  async function handleGeocode(e: FormEvent) {
+    e.preventDefault();
+    if (!placeQuery.trim()) return;
+    setGeoError(null);
+    setGeoOptions([]);
+    setGeoLoading(true);
+    try {
+      const r = await fetch("/api/v1/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: placeQuery, limit: 5 }),
+      });
+      const j = await r.json();
+      if (!r.ok || j.error) throw new Error(j.error?.message ?? "Geocoder error");
+      const results = (j.data?.results ?? []) as GeocodeResult[];
+      if (results.length === 0) {
+        setGeoError("No matches. Try a different spelling.");
+      } else if (results.length === 1) {
+        applyGeocoded(results[0]);
+      } else {
+        setGeoOptions(results);
+      }
+    } catch (err) {
+      setGeoError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGeoLoading(false);
+    }
+  }
+
+  function applyGeocoded(g: GeocodeResult) {
+    setForm({
+      ...form,
+      latitude: g.latitude.toFixed(4),
+      longitude: g.longitude.toFixed(4),
+      timezone: g.timezone,
+    });
+    setGeoOptions([]);
+    setPlaceQuery(g.display_name);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -139,8 +194,78 @@ export default function ChartPage() {
           <Field label="Birth time (24h)">
             <input type="time" value={form.time} onChange={update("time")} required />
           </Field>
+          <Field label="Birthplace (city) — fills lat/lon + timezone" full>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <input
+                type="text"
+                value={placeQuery}
+                onChange={(e) => { setPlaceQuery(e.target.value); setGeoError(null); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleGeocode(e as unknown as FormEvent); } }}
+                placeholder='e.g. "New Orleans, LA" or "Berlin, Germany"'
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={handleGeocode}
+                disabled={geoLoading || !placeQuery.trim()}
+                style={{
+                  background: "transparent",
+                  color: "var(--accent)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 7,
+                  padding: "0.55rem 1.1rem",
+                  cursor: geoLoading ? "wait" : "pointer",
+                  opacity: geoLoading || !placeQuery.trim() ? 0.5 : 1,
+                  fontSize: 14,
+                  minHeight: 44,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {geoLoading ? "Searching…" : "Find"}
+              </button>
+            </div>
+            {geoError && (
+              <div role="alert" style={{ color: "#ff6b6b", fontSize: 12, marginTop: 6 }}>{geoError}</div>
+            )}
+            {geoOptions.length > 0 && (
+              <div role="listbox" style={{ marginTop: 6, background: "var(--code-bg)", border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden" }}>
+                <div style={{ padding: "0.4rem 0.7rem", fontSize: 11, color: "var(--muted)", letterSpacing: "0.05em", textTransform: "uppercase", borderBottom: "1px solid var(--border)" }}>
+                  {geoOptions.length} matches — pick one
+                </div>
+                {geoOptions.map((g, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    role="option"
+                    onClick={() => applyGeocoded(g)}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      textAlign: "left",
+                      background: "transparent",
+                      border: 0,
+                      color: "var(--fg)",
+                      padding: "0.6rem 0.7rem",
+                      borderTop: i === 0 ? "0" : "1px solid var(--border)",
+                      cursor: "pointer",
+                      fontSize: 13,
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    {g.display_name}
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2, fontFamily: "ui-monospace, monospace" }}>
+                      {g.latitude.toFixed(4)}, {g.longitude.toFixed(4)} · {g.timezone}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </Field>
           <Field label="Timezone (IANA)" full>
             <select value={form.timezone} onChange={update("timezone")} required>
+              {COMMON_TIMEZONES.includes(form.timezone) ? null : (
+                <option value={form.timezone}>{form.timezone} (from city)</option>
+              )}
               {COMMON_TIMEZONES.map((tz) => (
                 <option key={tz} value={tz}>{tz}</option>
               ))}

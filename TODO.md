@@ -18,6 +18,7 @@
 
 ## Enhancements (nice to have)
 
+- [ ] Sabian Symbols — 360-degree symbolic image per zodiac degree (Marc Edmund Jones / Elsie Wheeler). Map every planet position to its Sabian symbol; needs the canonical 360-entry table.
 - [ ] Cards of Destiny Planetary Ruling Card + Karma Cards (needs verified lookup tables)
 - [ ] Topocentric flag — design concurrency for sweph's global `set_topo` state. Mainly affects Moon (~1°)
 - [ ] Sidereal zodiac with selectable ayanamsa (Lahiri / Krishnamurti / Fagan-Bradley)

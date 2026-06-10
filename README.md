@@ -13,8 +13,9 @@ Open-source HTTP API for calculating astrological and esoteric birth-data system
 | `POST /api/v1/gene-keys/profile`        | Hologenetic Profile: 11 spheres across Activation, Venus, and Pearl sequences                                                    |
 | `POST /api/v1/life-path`                | Life Path number, Birthday number, with reduction trace                                                                          |
 | `POST /api/v1/destiny-card`             | Birth Card per Robert Lee Camp's Solar Spread                                                                                    |
+| `POST /api/v1/geocode`                  | City / place name → lat, lon, IANA timezone (OpenStreetMap Nominatim + tz-lookup)                                                |
 
-Interactive chart UI: `GET /chart` — fills in a form, hits all calculators in parallel, renders the full chart.
+Interactive chart UI: `GET /chart` — type a city to auto-fill birthplace + timezone, then generate a full chart.
 
 API documentation: `GET /docs` (Swagger UI). OpenAPI spec: `GET /api/openapi.json`.
 

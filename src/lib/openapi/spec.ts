@@ -130,6 +130,18 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           responses: { "200": { description: "Birth Card" } },
         },
       },
+      "/api/v1/geocode": {
+        post: {
+          summary: "Look up a city / place name → lat, lon, and IANA timezone",
+          description:
+            "Backed by OpenStreetMap's Nominatim service. Returns up to N matches; for each, the timezone is derived from the resolved coordinates. Use for birthplace lookup in client UIs.",
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { $ref: "#/components/schemas/GeocodeInput" } } },
+          },
+          responses: { "200": { description: "Ranked list of matching places with lat/lon/timezone" } },
+        },
+      },
     },
     components: {
       schemas: {
