@@ -23,9 +23,35 @@ html, body {
 a {
   color: var(--accent);
   text-decoration: none;
-  border-bottom: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+  border-bottom: 1px solid color-mix(in oklab, var(--accent) 60%, transparent);
 }
 a:hover { border-bottom-color: var(--accent); }
+
+/* Visible focus rings on dark backgrounds (WCAG 2.4.7 / 1.4.11). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Screen-reader-only utility for live-region announcements. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Stack two- and three-column grids on phones. */
+@media (max-width: 600px) {
+  body { font-size: 15px; }
+  .stack-on-mobile { grid-template-columns: 1fr !important; }
+  .kv-stack-on-mobile { flex-direction: column !important; }
+  .kv-stack-on-mobile > :first-child { flex: 0 0 auto !important; }
+}
 
 code, pre {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

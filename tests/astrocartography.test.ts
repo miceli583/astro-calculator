@@ -271,3 +271,82 @@ describe("astrocartography — invariants across multiple charts", () => {
     expect(diff).toBeLessThan(15.5);
   });
 });
+
+describe("astrocartography — parans", () => {
+  const acg = calculateAstrocartography(DIANA.birth);
+  const jd = julianDayUT(DIANA.birth.datetime, DIANA.birth.timezone);
+  const gst = greenwichSiderealTimeDeg(jd);
+
+  it("returns a non-empty parans array for a real chart", () => {
+    expect(acg.parans.length).toBeGreaterThan(0);
+  });
+
+  it("excludes degenerate MC×MC and IC×IC vertical-line pairs", () => {
+    const meridianBoth = acg.parans.filter(
+      (p) =>
+        (p.angle1 === "MC" || p.angle1 === "IC") &&
+        (p.angle2 === "MC" || p.angle2 === "IC")
+    );
+    expect(meridianBoth.length).toBe(0);
+  });
+
+  it("every paran's latitude is within the sampling range", () => {
+    for (const p of acg.parans) {
+      expect(Math.abs(p.latitude)).toBeLessThanOrEqual(85);
+    }
+  });
+
+  it("every paran's two lines actually intersect there (independent re-check)", () => {
+    // For each paran, recompute both planetary lines at the paran latitude
+    // from the equatorial coordinates and confirm both pass through the
+    // reported longitude within 0.5° tolerance.
+    for (const paran of acg.parans.slice(0, 30)) { // first 30 for speed
+      const eq1 = calcPlanetEquatorial(jd, paran.planet1);
+      const eq2 = calcPlanetEquatorial(jd, paran.planet2);
+
+      function lineLonAt(eq: typeof eq1, lat: number, angle: typeof paran.angle1): number | null {
+        if (angle === "MC") {
+          let l = eq.rightAscension - gst;
+          while (l > 180) l -= 360;
+          while (l < -180) l += 360;
+          return l;
+        }
+        if (angle === "IC") {
+          let l = eq.rightAscension - gst + 180;
+          while (l > 180) l -= 360;
+          while (l < -180) l += 360;
+          return l;
+        }
+        const cosH = -Math.tan(lat * RAD) * Math.tan(eq.declination * RAD);
+        if (cosH < -1 || cosH > 1) return null;
+        const H = Math.acos(cosH) * DEG;
+        const ha = angle === "AC" ? -H : H;
+        let l = eq.rightAscension + ha - gst;
+        while (l > 180) l -= 360;
+        while (l < -180) l += 360;
+        return l;
+      }
+
+      const lon1 = lineLonAt(eq1, paran.latitude, paran.angle1);
+      const lon2 = lineLonAt(eq2, paran.latitude, paran.angle2);
+      expect(lon1, `${paran.planet1} ${paran.angle1} should be defined at paran lat`).not.toBeNull();
+      expect(lon2, `${paran.planet2} ${paran.angle2} should be defined at paran lat`).not.toBeNull();
+      expect(angularDistance(lon1!, paran.longitude)).toBeLessThan(0.5);
+      expect(angularDistance(lon2!, paran.longitude)).toBeLessThan(0.5);
+    }
+  });
+
+  it("include_parans=false suppresses the parans calculation", () => {
+    const result = calculateAstrocartography({ ...DIANA.birth, include_parans: false });
+    expect(result.parans).toEqual([]);
+  });
+
+  it("parans are sorted by absolute latitude ascending", () => {
+    let prev = -1;
+    for (const p of acg.parans) {
+      const absLat = Math.abs(p.latitude);
+      expect(absLat).toBeGreaterThanOrEqual(prev);
+      prev = absLat;
+    }
+  });
+});

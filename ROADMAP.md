@@ -13,7 +13,8 @@ Foundational calculator API. Goal: every system has a working endpoint.
 - [x] Life Path numerology
 - [x] Destiny Cards
 - [x] OpenAPI 3.1 spec + Swagger UI
-- [ ] Reference test fixtures
+- [x] Reference test fixtures (Diana, Einstein, Jobs)
+- [x] Interactive `/chart` UI
 - [ ] Deploy to Vercel
 
 ## Phase 2 — Production hardening
@@ -27,13 +28,18 @@ Foundational calculator API. Goal: every system has a working endpoint.
 
 ## Phase 3 — Expanded astrology
 
-- [ ] Astrocartography parans
+- [x] Astrocartography parans
+- [x] Secondary progressions
+- [x] Solar returns
+- [x] Part of Fortune
+- [x] Black Moon Lilith
+- [x] HD Variables (4 arrows)
 - [ ] Synastry / composite charts
-- [ ] Solar / lunar / planetary returns
-- [ ] Secondary progressions
+- [ ] Lunar / planetary (non-Sun) returns
 - [ ] Sidereal zodiac (multiple ayanamsa options)
+- [ ] Topocentric flag (Moon precision)
 - [ ] Asteroids beyond the main four (Chiron, Juno, Vesta, Pallas, Ceres are MVP)
-- [ ] Fixed stars and Arabic parts
+- [ ] Fixed stars and Arabic parts beyond Fortune
 
 ## Phase 4 — SDKs and dev experience
 

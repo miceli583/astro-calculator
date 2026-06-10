@@ -25,15 +25,20 @@ commercial Swiss Ephemeris license.
 - Stateless: no DB, no auth (public calculator)
 - Validation: Zod
 - Docs: OpenAPI 3.1 spec at `/api/openapi.json` + Swagger UI at `/docs`
+- Interactive chart UI at `/chart` (client-side React, hits the API)
 
 ### Module layout
 
 ```
 src/
-├── app/api/v1/...           # Route handlers, thin wrappers around lib/calculators
+├── app/
+│   ├── api/v1/...           # Route handlers, thin wrappers around lib/calculators (9 endpoints)
+│   ├── chart/page.tsx       # Interactive client UI: birth form → all calculators → rendered chart
+│   ├── docs/                # Swagger UI mount
+│   └── page.tsx             # API docs landing page
 ├── lib/
 │   ├── ephemeris/           # sweph wrapper, julian day helpers
-│   ├── calculators/         # One file per system (astrology, hd, etc.)
+│   ├── calculators/         # One file per system (astrology, hd, gk, life-path, destiny-card, astrocartography)
 │   ├── constants/           # Gate mappings, card mappings, planet IDs
 │   ├── validation/          # Zod schemas (input + output)
 │   └── openapi/             # Spec generation

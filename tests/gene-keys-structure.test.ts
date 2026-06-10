@@ -24,10 +24,10 @@ describe("Gene Keys — structural validity", () => {
         }
       });
 
-      it("Venus Sequence has 6 spheres with valid gate/line", () => {
+      it("Venus Sequence has 5 spheres with valid gate/line", () => {
         const spheres = [
           profile.venus.attraction, profile.venus.iq, profile.venus.eq,
-          profile.venus.sq, profile.venus.core, profile.venus.wound,
+          profile.venus.sq, profile.venus.core,
         ];
         for (const s of spheres) {
           expect(s.gate, s.name).toBeGreaterThanOrEqual(1);
@@ -37,24 +37,14 @@ describe("Gene Keys — structural validity", () => {
         }
       });
 
-      it("Pearl Sequence has 3 spheres with valid gate/line", () => {
-        const spheres = [profile.pearl.vocation, profile.pearl.culture, profile.pearl.brand];
+      it("Pearl Sequence has 2 spheres with valid gate/line", () => {
+        const spheres = [profile.pearl.vocation, profile.pearl.culture];
         for (const s of spheres) {
           expect(s.gate, s.name).toBeGreaterThanOrEqual(1);
           expect(s.gate, s.name).toBeLessThanOrEqual(64);
           expect(s.line, s.name).toBeGreaterThanOrEqual(1);
           expect(s.line, s.name).toBeLessThanOrEqual(6);
         }
-      });
-
-      it("Activation 'brand' (Pearl) equals 'Life's Work' (Activation) — both are Personality Sun", () => {
-        expect(profile.pearl.brand.gate).toBe(profile.activation.lifesWork.gate);
-        expect(profile.pearl.brand.line).toBe(profile.activation.lifesWork.line);
-      });
-
-      it("Venus 'core' equals Activation 'purpose' — both are Design Earth", () => {
-        expect(profile.venus.core.gate).toBe(profile.activation.purpose.gate);
-        expect(profile.venus.core.line).toBe(profile.activation.purpose.line);
       });
 
       it("Gene Keys Life's Work gate matches HD Personality Sun gate", () => {

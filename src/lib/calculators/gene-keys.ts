@@ -1,16 +1,12 @@
-// Gene Keys Profile (Richard Rudd's system).
+// Gene Keys Hologenetic Profile (Richard Rudd's system).
 //
-// Gene Keys shares the 64-hexagram wheel with Human Design but interprets the
-// activations through three sequences:
+// The official Hologenetic Profile displays 11 spheres across 3 sequences:
 //
-//   • Activation Sequence — 4 prime gifts (Life's Work, Evolution, Radiance, Purpose)
-//   • Venus Sequence      — 6 spheres of relating (heart line)
-//   • Pearl Sequence      — 3 spheres of prosperity
+//   • Activation Sequence — 4 spheres: Life's Work, Evolution, Radiance, Purpose
+//   • Venus Sequence      — 5 spheres: Attraction, IQ, EQ, SQ, Core
+//   • Pearl Sequence      — 2 spheres: Pearl/Vocation, Culture
 //
-// The mapping below uses the most commonly cited convention. Different
-// teachers describe slight variations; verify against an authoritative
-// Gene Keys profile (e.g. Richard Rudd's official chart) before building
-// downstream interpretation.
+// Source mappings verified against the official genekeys.com profile.
 
 import {
   calcAllPlanets,
@@ -71,18 +67,16 @@ export interface ActivationSequence {
 }
 
 export interface VenusSequence {
-  attraction: Sphere; // P-Mars
+  attraction: Sphere; // D-Moon
   iq: Sphere; // P-Venus
-  eq: Sphere; // P-Moon
-  sq: Sphere; // P-Mercury
-  core: Sphere; // D-Earth (same gate as Purpose)
-  wound: Sphere; // P-Saturn
+  eq: Sphere; // P-Mars
+  sq: Sphere; // D-Venus
+  core: Sphere; // D-Mars
 }
 
 export interface PearlSequence {
-  vocation: Sphere; // D-Jupiter
-  culture: Sphere; // P-Jupiter
-  brand: Sphere; // P-Sun (same as Life's Work)
+  vocation: Sphere; // P-Jupiter (the "Pearl" sphere)
+  culture: Sphere; // D-Jupiter
 }
 
 export interface GeneKeysProfile {
@@ -98,12 +92,12 @@ function sphere(name: string, source: string, a: GateActivation): Sphere {
 }
 
 /**
- * Compute a Gene Keys profile (Richard Rudd's system) from birth data.
+ * Compute a Gene Keys Hologenetic Profile (Richard Rudd's system) from birth data.
  *
- * Returns three sequences derived from the same 64-gate wheel used by Human Design:
- *   - Activation Sequence (4 spheres): Life's Work, Evolution, Radiance, Purpose
- *   - Venus Sequence (6 spheres): Attraction, IQ, EQ, SQ, Core, Wound
- *   - Pearl Sequence (3 spheres): Vocation, Culture, Brand
+ * Returns the 11 spheres of the official Hologenetic Profile across three sequences:
+ *   - Activation Sequence (4): Life's Work, Evolution, Radiance, Purpose
+ *   - Venus Sequence (5): Attraction, IQ, EQ, SQ, Core
+ *   - Pearl Sequence (2): Vocation (Pearl), Culture
  *
  * The "Design" moment is the same as HD's: when the Sun was 88° behind its
  * birth longitude (~88 calendar days earlier).
@@ -129,17 +123,15 @@ export function calculateGeneKeys(input: BirthData): GeneKeysProfile {
       purpose: sphere("Purpose", "Design Earth", design.byPlanet.earth),
     },
     venus: {
-      attraction: sphere("Attraction", "Personality Mars", personality.byPlanet.mars),
+      attraction: sphere("Attraction", "Design Moon", design.byPlanet.moon),
       iq: sphere("IQ", "Personality Venus", personality.byPlanet.venus),
-      eq: sphere("EQ", "Personality Moon", personality.byPlanet.moon),
-      sq: sphere("SQ", "Personality Mercury", personality.byPlanet.mercury),
-      core: sphere("Core", "Design Earth", design.byPlanet.earth),
-      wound: sphere("Wound", "Personality Saturn", personality.byPlanet.saturn),
+      eq: sphere("EQ", "Personality Mars", personality.byPlanet.mars),
+      sq: sphere("SQ", "Design Venus", design.byPlanet.venus),
+      core: sphere("Core", "Design Mars", design.byPlanet.mars),
     },
     pearl: {
-      vocation: sphere("Vocation", "Design Jupiter", design.byPlanet.jupiter),
-      culture: sphere("Culture", "Personality Jupiter", personality.byPlanet.jupiter),
-      brand: sphere("Brand", "Personality Sun", personality.byPlanet.sun),
+      vocation: sphere("Vocation", "Personality Jupiter", personality.byPlanet.jupiter),
+      culture: sphere("Culture", "Design Jupiter", design.byPlanet.jupiter),
     },
   };
 }

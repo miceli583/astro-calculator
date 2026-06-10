@@ -43,6 +43,8 @@ export const PLANETS = {
   pluto: 9,
   mean_node: 10,
   true_node: 11,
+  mean_lilith: 12, // Black Moon Lilith — Mean lunar apogee (most common)
+  osc_lilith: 13,  // Black Moon Lilith — Osculating apogee (less common)
   chiron: 15,
   ceres: 17,
   pallas: 18,

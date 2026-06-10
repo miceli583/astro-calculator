@@ -83,3 +83,32 @@ describe("HD — Diana snapshot (PROVISIONAL — gate offset not yet verified)",
     }
   });
 });
+
+describe("Incarnation Cross angle is determined by Profile (canonical mapping)", () => {
+  // The cross angle is fixed by the 12-profile system; these tests assert the
+  // canonical mapping per Ra Uru Hu, not specific birth charts.
+  const CASES: { profile: string; expected: string }[] = [
+    { profile: "1/3", expected: "Right Angle" },
+    { profile: "1/4", expected: "Right Angle" },
+    { profile: "2/4", expected: "Right Angle" },
+    { profile: "2/5", expected: "Right Angle" },
+    { profile: "3/5", expected: "Right Angle" },
+    { profile: "3/6", expected: "Right Angle" },
+    { profile: "4/6", expected: "Right Angle" },
+    { profile: "4/1", expected: "Juxtaposition" },
+    { profile: "5/1", expected: "Left Angle" },
+    { profile: "5/2", expected: "Left Angle" },
+    { profile: "6/2", expected: "Left Angle" },
+    { profile: "6/3", expected: "Left Angle" },
+  ];
+
+  // We exercise the logic via a representative chart and check the angle
+  // string in the cross name matches the canonical mapping for that chart's
+  // profile. Diana's chart is used as the substrate.
+  it("Diana's cross name angle matches the canonical mapping for her profile", () => {
+    const chart = calculateHumanDesign(DIANA.birth);
+    const expected = CASES.find((c) => c.profile === chart.profile)?.expected;
+    expect(expected, `unknown profile ${chart.profile}`).toBeDefined();
+    expect(chart.incarnationCross.name.startsWith(expected!)).toBe(true);
+  });
+});

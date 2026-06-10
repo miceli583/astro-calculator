@@ -14,6 +14,7 @@ import {
   calcPlanetEquatorial,
   greenwichSiderealTimeDeg,
   julianDayUT,
+  type EquatorialPosition,
   type PlanetName,
 } from "../ephemeris/client";
 import type { BirthData } from "../types/birth-data";
@@ -34,9 +35,29 @@ export interface PlanetLines {
   lines: LineSegment[];
 }
 
+export type Angle = "MC" | "IC" | "AC" | "DC";
+
+export interface Paran {
+  planet1: PlanetName;
+  angle1: Angle;
+  planet2: PlanetName;
+  angle2: Angle;
+  /** Latitude (°N positive) where the two lines cross. */
+  latitude: number;
+  /** Longitude (°E positive, normalized to [-180, 180]) of the crossing. */
+  longitude: number;
+}
+
 export interface AstrocartographyResult {
   jd_ut: number;
   planets: PlanetLines[];
+  /**
+   * Parans = points on Earth where two of the chart's planetary lines cross.
+   * Practitioners consider these high-activation zones where both planetary
+   * themes are simultaneously emphasized. Sorted by absolute latitude
+   * (equator-near first), then by planet names.
+   */
+  parans: Paran[];
 }
 
 const RAD = Math.PI / 180;
@@ -87,6 +108,121 @@ export interface AstroInput extends BirthData {
   min_latitude?: number;
   /** Max latitude to sample (default 85). */
   max_latitude?: number;
+  /** Include parans (line-crossing points) in the result. Default true. */
+  include_parans?: boolean;
+  /**
+   * Latitude resolution (degrees) for the paran sweep. Lower = more precise
+   * intersection latitude, more compute. Default 0.5°.
+   */
+  paran_resolution?: number;
+}
+
+// --- Paran detection helpers ---
+
+/**
+ * For a given planet and angle, compute the longitude where that planet is on
+ * that angle at the specified observer latitude. Returns null if the planet
+ * does not rise/set at that latitude (circumpolar case for AC/DC).
+ */
+function planetLongitudeOnAngle(
+  eq: EquatorialPosition,
+  gstDeg: number,
+  latDeg: number,
+  angle: Angle
+): number | null {
+  if (angle === "MC") return mcLongitude(eq.rightAscension, gstDeg);
+  if (angle === "IC") return normalizeLon(mcLongitude(eq.rightAscension, gstDeg) + 180);
+  return angleLineLongitude(eq.rightAscension, eq.declination, gstDeg, latDeg, angle);
+}
+
+/**
+ * Find all parans (line-crossing points) between every pair of planets and
+ * every pair of angles. A paran is the (lat, lon) where two of the chart's
+ * forty planetary lines intersect on Earth's surface.
+ *
+ * Detection: sweep latitude, watch the longitudinal difference between the
+ * two lines, and bisect near sign changes. Filters out antimeridian
+ * wrap-arounds (sign changes where both differences are ≥90° are not real
+ * crossings, just the ±180° branch cut).
+ */
+function findParans(
+  positions: { planet: PlanetName; eq: EquatorialPosition }[],
+  gstDeg: number,
+  minLat: number,
+  maxLat: number,
+  step: number
+): Paran[] {
+  const angles: Angle[] = ["MC", "IC", "AC", "DC"];
+  const parans: Paran[] = [];
+  const SIGN_CHANGE_WINDOW = 90; // degrees; reject wrap-around false positives
+
+  function shortestDiff(a: number, b: number): number {
+    return ((a - b + 540) % 360) - 180;
+  }
+
+  for (let i = 0; i < positions.length; i++) {
+    for (let j = i + 1; j < positions.length; j++) {
+      const p1 = positions[i];
+      const p2 = positions[j];
+      for (const A1 of angles) {
+        for (const A2 of angles) {
+          // Skip MC/MC and IC/IC pairs (parallel vertical lines, no
+          // intersection except in the degenerate equal-longitude case)
+          // and MC/IC of the same nature (same constant offset).
+          if (
+            (A1 === "MC" || A1 === "IC") &&
+            (A2 === "MC" || A2 === "IC")
+          ) continue;
+
+          let prevLat: number | null = null;
+          let prevDiff: number | null = null;
+          for (let lat = minLat; lat <= maxLat; lat += step) {
+            const lon1 = planetLongitudeOnAngle(p1.eq, gstDeg, lat, A1);
+            const lon2 = planetLongitudeOnAngle(p2.eq, gstDeg, lat, A2);
+            if (lon1 === null || lon2 === null) {
+              prevLat = null;
+              prevDiff = null;
+              continue;
+            }
+            const diff = shortestDiff(lon1, lon2);
+            if (
+              prevLat !== null &&
+              prevDiff !== null &&
+              Math.sign(diff) !== Math.sign(prevDiff) &&
+              Math.abs(diff) + Math.abs(prevDiff) < SIGN_CHANGE_WINDOW
+            ) {
+              // Linear interpolation for the zero-crossing latitude.
+              const denom = diff - prevDiff;
+              const paranLat = denom === 0 ? lat : prevLat - prevDiff * (lat - prevLat) / denom;
+              const paranLon = planetLongitudeOnAngle(p1.eq, gstDeg, paranLat, A1);
+              if (paranLon !== null) {
+                parans.push({
+                  planet1: p1.planet,
+                  angle1: A1,
+                  planet2: p2.planet,
+                  angle2: A2,
+                  latitude: Math.round(paranLat * 100) / 100,
+                  longitude: Math.round(paranLon * 100) / 100,
+                });
+              }
+            }
+            prevLat = lat;
+            prevDiff = diff;
+          }
+        }
+      }
+    }
+  }
+
+  parans.sort((a, b) => {
+    const dLat = Math.abs(a.latitude) - Math.abs(b.latitude);
+    if (dLat !== 0) return dLat;
+    if (a.planet1 !== b.planet1) return a.planet1 < b.planet1 ? -1 : 1;
+    if (a.planet2 !== b.planet2) return a.planet2 < b.planet2 ? -1 : 1;
+    if (a.angle1 !== b.angle1) return a.angle1 < b.angle1 ? -1 : 1;
+    return a.angle2 < b.angle2 ? -1 : 1;
+  });
+  return parans;
 }
 
 /**
@@ -115,9 +251,16 @@ export function calculateAstrocartography(input: AstroInput): AstrocartographyRe
   const step = input.latitude_step ?? 1;
   const minLat = input.min_latitude ?? -85;
   const maxLat = input.max_latitude ?? 85;
+  const includeParans = input.include_parans ?? true;
+  const paranResolution = input.paran_resolution ?? 0.5;
 
-  const planets: PlanetLines[] = planetList.map((name) => {
-    const eq = calcPlanetEquatorial(jd, name);
+  // Cache equatorial positions so the paran sweep doesn't recompute.
+  const positions: { planet: PlanetName; eq: EquatorialPosition }[] = planetList.map((name) => ({
+    planet: name,
+    eq: calcPlanetEquatorial(jd, name),
+  }));
+
+  const planets: PlanetLines[] = positions.map(({ planet: name, eq }) => {
     const mcLon = mcLongitude(eq.rightAscension, gst);
     const icLon = normalizeLon(mcLon + 180);
 
@@ -152,5 +295,9 @@ export function calculateAstrocartography(input: AstroInput): AstrocartographyRe
     return { planet: name, lines };
   });
 
-  return { jd_ut: jd, planets };
+  const parans = includeParans
+    ? findParans(positions, gst, minLat, maxLat, paranResolution)
+    : [];
+
+  return { jd_ut: jd, planets, parans };
 }

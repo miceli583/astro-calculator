@@ -4,6 +4,7 @@
 import {
   calcAllPlanets,
   calcHouses,
+  calcPlanet,
   julianDayUT,
   type HouseSystem,
   type PlanetName,
@@ -50,7 +51,7 @@ export function longitudeToSign(longitude: number): SignPosition {
 }
 
 export interface NatalPlanet {
-  name: PlanetName;
+  name: PlanetName | "south_node";
   longitude: number;
   latitude: number;
   speed: number;
@@ -69,6 +70,18 @@ export interface NatalChart {
     midheaven: { longitude: number; sign: SignPosition };
     vertex: { longitude: number; sign: SignPosition };
   };
+  /**
+   * Part of Fortune (Pars Fortunae) — derived point representing material
+   * well-being and "the place where you find your joy". Day-birth formula:
+   * ASC + Moon - Sun. Night-birth formula: ASC + Sun - Moon (reversed).
+   * `isDayBirth` tells you which formula was used.
+   */
+  partOfFortune: {
+    longitude: number;
+    sign: SignPosition;
+    house: number;
+    isDayBirth: boolean;
+  };
   aspects: Aspect[];
   /** Non-fatal warnings about the chart (e.g., high-latitude house distortion). */
   warnings: string[];
@@ -81,9 +94,11 @@ export interface NatalChart {
 const QUADRANT_SYSTEMS: ReadonlySet<HouseSystem> = new Set(["placidus", "koch", "regiomontanus", "campanus"]);
 const HIGH_LATITUDE_THRESHOLD = 66.5;
 
+export type AspectBody = PlanetName | "south_node";
+
 export interface Aspect {
-  from: PlanetName;
-  to: PlanetName;
+  from: AspectBody;
+  to: AspectBody;
   type: "conjunction" | "opposition" | "trine" | "square" | "sextile" | "quincunx";
   exactAngle: number;
   orb: number;
@@ -207,6 +222,48 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
     };
   });
 
+  // South Node is always 180° opposite the (true or mean) North Node. It isn't
+  // a Swiss Ephemeris body; we derive it whenever the user includes a node.
+  const northNode = planets.find((p) => p.name === "true_node" || p.name === "mean_node");
+  if (northNode) {
+    const snLon = (northNode.longitude + 180) % 360;
+    planets.push({
+      name: "south_node",
+      longitude: snLon,
+      latitude: 0,
+      speed: northNode.speed,
+      retrograde: northNode.retrograde,
+      sign: longitudeToSign(snLon),
+      house: houseFor(snLon, houses.cusps),
+    });
+  }
+
+  // Part of Fortune: day-birth = ASC + Moon - Sun; night-birth = ASC + Sun - Moon.
+  // Day birth ≡ Sun above horizon ≡ Sun's house ∈ {7..12} under conventional
+  // house counting (1 starts at ASC, descending eastern horizon).
+  const sunPlanet = planets.find((p) => p.name === "sun");
+  const moonPlanet = planets.find((p) => p.name === "moon");
+  let partOfFortune;
+  if (sunPlanet && moonPlanet) {
+    const isDayBirth = sunPlanet.house >= 7 && sunPlanet.house <= 12;
+    const pofLon = isDayBirth
+      ? ((houses.ascendant + moonPlanet.longitude - sunPlanet.longitude) % 360 + 360) % 360
+      : ((houses.ascendant + sunPlanet.longitude - moonPlanet.longitude) % 360 + 360) % 360;
+    partOfFortune = {
+      longitude: pofLon,
+      sign: longitudeToSign(pofLon),
+      house: houseFor(pofLon, houses.cusps),
+      isDayBirth,
+    };
+  } else {
+    partOfFortune = {
+      longitude: houses.ascendant,
+      sign: longitudeToSign(houses.ascendant),
+      house: 1,
+      isDayBirth: false,
+    };
+  }
+
   return {
     jd_ut: jd,
     planets,
@@ -221,6 +278,7 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
       midheaven: { longitude: houses.midheaven, sign: longitudeToSign(houses.midheaven) },
       vertex: { longitude: houses.vertex, sign: longitudeToSign(houses.vertex) },
     },
+    partOfFortune,
     aspects: computeAspects(planets),
     warnings,
   };
@@ -301,4 +359,169 @@ export function calculateTransits(input: TransitInput): TransitChart {
     transitingPlanets,
     aspectsToNatal,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Secondary Progressions
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ProgressedInput extends BirthData {
+  /** Years after birth to project the chart to. Can be fractional. */
+  years: number;
+  /** Planet subset; defaults to the fast-moving inner planets (Sun..Mars) plus Moon. */
+  planets?: PlanetName[];
+}
+
+export interface ProgressedChart {
+  natal_jd_ut: number;
+  progressed_jd_ut: number;
+  years: number;
+  planets: { name: PlanetName; longitude: number; sign: SignPosition; retrograde: boolean }[];
+}
+
+const DEFAULT_PROGRESSED_PLANETS: readonly PlanetName[] = [
+  "sun", "moon", "mercury", "venus", "mars",
+];
+
+/**
+ * Compute secondary-progressed planet positions.
+ *
+ * Per the classical "day for a year" symbolic technique: where the planets
+ * were N solar days after birth = their progressed positions at age N years.
+ * Only the fast-moving inner planets (Sun through Mars, plus the Moon) move
+ * meaningfully on this timescale; outer planets are essentially fixed and
+ * are omitted by default.
+ *
+ * @param input.years Number of years after birth (e.g. 28 for "at age 28").
+ *                    May be fractional ("28.5" = mid-year).
+ */
+export function calculateProgressions(input: ProgressedInput): ProgressedChart {
+  const natalJd = julianDayUT(input.datetime, input.timezone);
+  const progressedJd = natalJd + input.years;
+  const planetList = input.planets ?? DEFAULT_PROGRESSED_PLANETS;
+  const positions = calcAllPlanets(progressedJd, planetList);
+
+  const planets = planetList.map((name) => {
+    const p = positions[name];
+    return {
+      name,
+      longitude: p.longitude,
+      sign: longitudeToSign(p.longitude),
+      retrograde: p.longitudeSpeed < 0,
+    };
+  });
+
+  return {
+    natal_jd_ut: natalJd,
+    progressed_jd_ut: progressedJd,
+    years: input.years,
+    planets,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Solar Return
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SolarReturnInput {
+  natal: BirthData & { house_system?: HouseSystem };
+  /** Year of the return (e.g. 2026). */
+  year: number;
+  /**
+   * Optional relocation. Solar Returns are traditionally cast for where you
+   * will be during the year ahead. If omitted, uses the natal lat/lon.
+   */
+  relocation?: { latitude: number; longitude: number; timezone: string };
+}
+
+export interface SolarReturnChart extends NatalChart {
+  /** The natal Sun longitude that the return Sun matches. */
+  natal_sun_longitude: number;
+  /** UT instant when transit Sun returns to natal Sun longitude in the given year. */
+  return_jd_ut: number;
+  year: number;
+  /** True if the return chart was cast at a relocated lat/lon. */
+  relocated: boolean;
+}
+
+/**
+ * Compute a Solar Return chart for a given year.
+ *
+ * Finds the JD-UT instant where the Sun's ecliptic longitude equals the natal
+ * Sun's, on or near the birthday in the requested year, then casts a full
+ * natal-style chart for that moment at the (optionally relocated) location.
+ */
+export function calculateSolarReturn(input: SolarReturnInput): SolarReturnChart {
+  const natalJd = julianDayUT(input.natal.datetime, input.natal.timezone);
+  const natalSunLon = calcPlanet(natalJd, "sun").longitude;
+
+  // Birth month/day in the target year as a starting guess. The return occurs
+  // within ±1 day of the birthday. Iterate Newton-style on Sun longitude.
+  const m = input.natal.datetime.match(/^\d{4}-(\d{2})-(\d{2})/);
+  if (!m) throw new Error("natal.datetime must be ISO 8601");
+  const month = m[1];
+  const day = m[2];
+  const seedIso = `${input.year}-${month}-${day}T00:00:00`;
+  let jd = julianDayUT(seedIso, input.natal.timezone);
+
+  for (let i = 0; i < 12; i++) {
+    const cur = calcPlanet(jd, "sun");
+    let diff = cur.longitude - natalSunLon;
+    while (diff > 180) diff -= 360;
+    while (diff <= -180) diff += 360;
+    if (Math.abs(diff) < 1e-7) break;
+    jd -= diff / cur.longitudeSpeed;
+  }
+
+  // Cast the full chart at the return JD using the chosen location.
+  const lat = input.relocation?.latitude ?? input.natal.latitude;
+  const lon = input.relocation?.longitude ?? input.natal.longitude;
+  const tz = input.relocation?.timezone ?? input.natal.timezone;
+
+  // The natal-chart calculator wants a datetime + timezone. Convert JD-UT
+  // back to a UTC ISO string and pass UTC explicitly to avoid TZ conversion.
+  const isoUtc = jdUtToIsoUtc(jd);
+
+  const chart = calculateNatalChart({
+    datetime: isoUtc,
+    timezone: "UTC",
+    latitude: lat,
+    longitude: lon,
+    house_system: input.natal.house_system,
+  });
+
+  return {
+    ...chart,
+    natal_sun_longitude: natalSunLon,
+    return_jd_ut: jd,
+    year: input.year,
+    relocated: input.relocation !== undefined && (lat !== input.natal.latitude || lon !== input.natal.longitude || tz !== input.natal.timezone),
+  };
+}
+
+/** Convert a Julian Day (UT) to an ISO 8601 UTC datetime string. */
+function jdUtToIsoUtc(jd: number): string {
+  // Standard JD-to-Gregorian (Meeus, Astronomical Algorithms ch. 7).
+  const Z = Math.floor(jd + 0.5);
+  const F = jd + 0.5 - Z;
+  let A = Z;
+  if (Z >= 2299161) {
+    const alpha = Math.floor((Z - 1867216.25) / 36524.25);
+    A = Z + 1 + alpha - Math.floor(alpha / 4);
+  }
+  const B = A + 1524;
+  const C = Math.floor((B - 122.1) / 365.25);
+  const D = Math.floor(365.25 * C);
+  const E = Math.floor((B - D) / 30.6001);
+  const dayFloat = B - D - Math.floor(30.6001 * E) + F;
+  const day = Math.floor(dayFloat);
+  const month = E < 14 ? E - 1 : E - 13;
+  const year = month > 2 ? C - 4716 : C - 4715;
+  const dayFrac = dayFloat - day;
+  const totalSeconds = Math.round(dayFrac * 86400);
+  const hh = Math.floor(totalSeconds / 3600);
+  const mm = Math.floor((totalSeconds % 3600) / 60);
+  const ss = totalSeconds % 60;
+  const pad = (n: number, w = 2) => String(n).padStart(w, "0");
+  return `${pad(year, 4)}-${pad(month)}-${pad(day)}T${pad(hh)}:${pad(mm)}:${pad(ss)}`;
 }

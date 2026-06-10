@@ -2,15 +2,19 @@
 
 Open-source HTTP API for calculating astrological and esoteric birth-data systems:
 
-| Endpoint                             | What it returns                                                              |
-| ------------------------------------ | ---------------------------------------------------------------------------- |
-| `POST /api/v1/astrology/natal`       | Natal chart: planet positions, house cusps, aspects                          |
-| `POST /api/v1/astrology/transits`    | Current planet positions and aspects to a natal chart                        |
-| `POST /api/v1/astrocartography`      | Lat/lon arrays for MC, IC, AC, DC lines per planet                           |
-| `POST /api/v1/human-design/chart`    | Type, profile, authority, defined centers, channels, gates, incarnation cross |
-| `POST /api/v1/gene-keys/profile`     | Activation Sequence, Venus Sequence, Pearl Sequence                          |
-| `POST /api/v1/life-path`             | Life Path number, Birthday number, Expression number                         |
-| `POST /api/v1/destiny-card`          | Birth Card and planetary ruling card                                         |
+| Endpoint                                | What it returns                                                                                                                  |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/astrology/natal`          | Natal chart: planet positions (incl. Lilith, South Node), house cusps, aspects, Part of Fortune                                  |
+| `POST /api/v1/astrology/transits`       | Current planet positions and aspects to a natal chart                                                                            |
+| `POST /api/v1/astrology/progressions`   | Secondary-progressed inner-planet positions for any age ("day for a year")                                                       |
+| `POST /api/v1/astrology/solar-return`   | Solar Return chart for a given year, optionally relocated                                                                        |
+| `POST /api/v1/astrocartography`         | MC/IC/AC/DC lines per planet + parans (line-crossing points)                                                                     |
+| `POST /api/v1/human-design/chart`       | Type, profile, authority, defined centers, channels, gates, incarnation cross, Variables (4 arrows)                              |
+| `POST /api/v1/gene-keys/profile`        | Hologenetic Profile: 11 spheres across Activation, Venus, and Pearl sequences                                                    |
+| `POST /api/v1/life-path`                | Life Path number, Birthday number, with reduction trace                                                                          |
+| `POST /api/v1/destiny-card`             | Birth Card per Robert Lee Camp's Solar Spread                                                                                    |
+
+Interactive chart UI: `GET /chart` — fills in a form, hits all calculators in parallel, renders the full chart.
 
 API documentation: `GET /docs` (Swagger UI). OpenAPI spec: `GET /api/openapi.json`.
 

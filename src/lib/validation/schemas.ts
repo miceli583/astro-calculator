@@ -41,6 +41,8 @@ export const planetEnum = z.enum([
   "pluto",
   "mean_node",
   "true_node",
+  "mean_lilith",
+  "osc_lilith",
   "chiron",
   "ceres",
   "pallas",
@@ -60,11 +62,30 @@ export const transitInputSchema = z.object({
   planets: z.array(planetEnum).optional(),
 });
 
+export const progressedInputSchema = birthDataSchema.extend({
+  years: z.number().min(0).max(120),
+  planets: z.array(planetEnum).optional(),
+});
+
+export const solarReturnInputSchema = z.object({
+  natal: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
+  year: z.number().int().min(1500).max(3500),
+  relocation: z
+    .object({
+      latitude: z.number().min(-90).max(90),
+      longitude: z.number().min(-180).max(180),
+      timezone: z.string(),
+    })
+    .optional(),
+});
+
 export const astrocartoInputSchema = birthDataSchema.extend({
   planets: z.array(planetEnum).optional(),
   latitude_step: z.number().positive().max(10).optional(),
   min_latitude: z.number().min(-90).max(90).optional(),
   max_latitude: z.number().min(-90).max(90).optional(),
+  include_parans: z.boolean().optional(),
+  paran_resolution: z.number().positive().max(5).optional(),
 });
 
 export const humanDesignInputSchema = birthDataSchema;

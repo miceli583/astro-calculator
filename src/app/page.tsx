@@ -32,6 +32,36 @@ export default function Home() {
           Astrology, astrocartography, Human Design, Gene Keys, Life Path, and Destiny Cards.
           One HTTP API, Swiss Ephemeris precision, fully open source.
         </p>
+        <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.75rem" }}>
+          <a
+            href="/chart"
+            style={{
+              display: "inline-block",
+              background: "var(--accent)",
+              color: "#1a1535",
+              padding: "0.65rem 1.4rem",
+              borderRadius: 8,
+              fontWeight: 600,
+              border: 0,
+              fontSize: 15,
+            }}
+          >
+            Generate a chart →
+          </a>
+          <a
+            href="/docs"
+            style={{
+              display: "inline-block",
+              border: "1px solid var(--border)",
+              color: "var(--fg)",
+              padding: "0.6rem 1.2rem",
+              borderRadius: 8,
+              fontSize: 14,
+            }}
+          >
+            Interactive API docs
+          </a>
+        </div>
       </header>
 
       <section style={{ marginBottom: "3rem" }}>

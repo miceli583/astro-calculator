@@ -88,3 +88,16 @@ describe("astrology — J2000 synthetic Sun position", () => {
     expectLongitudeClose(sun.longitude, exp.longitude, exp.tolDeg, "J2000 Sun");
   });
 });
+
+describe("astrology — South Node is derived from True Node + 180°", () => {
+  it("South Node is present in default output and sits opposite True Node", () => {
+    const chart = calculateNatalChart(J2000_NOON.birth);
+    const tn = chart.planets.find((p) => p.name === "true_node");
+    const sn = chart.planets.find((p) => p.name === "south_node");
+    expect(tn, "true_node missing from default output").toBeDefined();
+    expect(sn, "south_node missing from default output").toBeDefined();
+    // Opposite by exactly 180° mod 360.
+    const sep = ((sn!.longitude - tn!.longitude) % 360 + 360) % 360;
+    expect(Math.abs(sep - 180)).toBeLessThan(1e-9);
+  });
+});

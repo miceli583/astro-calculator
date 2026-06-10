@@ -1,15 +1,18 @@
-// Destiny Cards (Sacred Symbols of Olney Richmond, 1893).
+// Destiny Cards / Cards of Destiny (Robert Lee Camp's Solar Birth Card chart).
 //
-// Each calendar day maps to one of 52 playing cards. The mapping is published
-// in standard tables; we encode it directly here. Feb 29 maps to the same
-// card as Feb 28 (some traditions use Mar 1 — set FEB_29_FALLBACK to "march"
-// to switch).
+// Source of truth: the Cards of Destiny Birth Chart as published by Camp and
+// widely reproduced (e.g. Ashley Long / Cardologer at createtheleap.com).
 //
-// Card encoding: short string like "AS" (Ace Spades), "QH" (Queen Hearts),
-// "10D" (Ten Diamonds), "JC" (Jack Clubs).
+// Algorithmic structure:
+//   - The deck is fixed in this order: K♠ Q♠ J♠ 10♠ … A♠ → K♦ … A♦ → K♣ … A♣ → K♥ … A♥
+//     (52 cards: spades, diamonds, clubs, hearts; each suit descending K→A)
+//   - Each month starts 2 deck-positions ahead of the previous month.
+//   - Each day within a month advances 1 deck-position.
+//   - Formula: deckIndex = (2·(month − 1) + (day − 1)) mod 52
+//   - Sole exception: December 31 → Joker (no card).
 //
-// Source: standard "Destiny Card" lookup as published in The Cards of Your
-// Destiny (Robert Lee Camp) and earlier works by Olney Richmond.
+// Feb 29 has no native cell on the chart; FEB_29_FALLBACK selects whether it
+// resolves to Feb 28 (default) or Mar 1.
 
 export type Suit = "spades" | "hearts" | "diamonds" | "clubs";
 export type Rank =
@@ -43,85 +46,36 @@ export function makeCard(rank: Rank, suit: Suit): Card {
   };
 }
 
-// Encoded as month (1-12) → array of 31 cards (index = day - 1).
-// Null entries are skipped (e.g. Feb 30/31).
-// "JOKER" indicates the single Joker card position (Dec 31 in this system).
-type Slot = `${Rank}${"S" | "H" | "D" | "C"}` | "JOKER" | null;
-
-const TABLE: Record<number, Slot[]> = {
-  // January
-  1: ["KS","QS","JS","10S","9S","8S","7S","6S","5S","4S",
-      "3S","2S","AS","KH","QH","JH","10H","9H","8H","7H",
-      "6H","5H","4H","3H","2H","AH","KD","QD","JD","10D","9D"],
-  // February (28 days; Feb 29 falls back per FEB_29_FALLBACK)
-  2: ["8D","7D","6D","5D","4D","3D","2D","AD","KC","QC",
-      "JC","10C","9C","8C","7C","6C","5C","4C","3C","2C",
-      "AC","KS","QS","JS","10S","9S","8S","7S",null,null,null],
-  // March
-  3: ["6S","5S","4S","3S","2S","AS","KH","QH","JH","10H",
-      "9H","8H","7H","6H","5H","4H","3H","2H","AH","KD",
-      "QD","JD","10D","9D","8D","7D","6D","5D","4D","3D","2D"],
-  // April
-  4: ["AD","KC","QC","JC","10C","9C","8C","7C","6C","5C",
-      "4C","3C","2C","AC","KS","QS","JS","10S","9S","8S",
-      "7S","6S","5S","4S","3S","2S","AS","KH","QH","JH",null],
-  // May
-  5: ["10H","9H","8H","7H","6H","5H","4H","3H","2H","AH",
-      "KD","QD","JD","10D","9D","8D","7D","6D","5D","4D",
-      "3D","2D","AD","KC","QC","JC","10C","9C","8C","7C","6C"],
-  // June
-  6: ["5C","4C","3C","2C","AC","KS","QS","JS","10S","9S",
-      "8S","7S","6S","5S","4S","3S","2S","AS","KH","QH",
-      "JH","10H","9H","8H","7H","6H","5H","4H","3H","2H",null],
-  // July
-  7: ["AH","KD","QD","JD","10D","9D","8D","7D","6D","5D",
-      "4D","3D","2D","AD","KC","QC","JC","10C","9C","8C",
-      "7C","6C","5C","4C","3C","2C","AC","KS","QS","JS","10S"],
-  // August
-  8: ["9S","8S","7S","6S","5S","4S","3S","2S","AS","KH",
-      "QH","JH","10H","9H","8H","7H","6H","5H","4H","3H",
-      "2H","AH","KD","QD","JD","10D","9D","8D","7D","6D","5D"],
-  // September
-  9: ["4D","3D","2D","AD","KC","QC","JC","10C","9C","8C",
-      "7C","6C","5C","4C","3C","2C","AC","KS","QS","JS",
-      "10S","9S","8S","7S","6S","5S","4S","3S","2S","AS",null],
-  // October
-  10: ["KH","QH","JH","10H","9H","8H","7H","6H","5H","4H",
-       "3H","2H","AH","KD","QD","JD","10D","9D","8D","7D",
-       "6D","5D","4D","3D","2D","AD","KC","QC","JC","10C","9C"],
-  // November
-  11: ["8C","7C","6C","5C","4C","3C","2C","AC","KS","QS",
-       "JS","10S","9S","8S","7S","6S","5S","4S","3S","2S",
-       "AS","KH","QH","JH","10H","9H","8H","7H","6H","5H",null],
-  // December
-  12: ["4H","3H","2H","AH","KD","QD","JD","10D","9D","8D",
-       "7D","6D","5D","4D","3D","2D","AD","KC","QC","JC",
-       "10C","9C","8C","7C","6C","5C","4C","3C","2C","AC","JOKER"],
+// Days-per-month for invalid-date rejection (Feb 29 handled separately).
+const DAYS_IN_MONTH: Record<number, number> = {
+  1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30,
+  7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31,
 };
 
-const SUIT_LETTER: Record<string, Suit> = { S: "spades", H: "hearts", D: "diamonds", C: "clubs" };
+// Deck order: K Q J 10 9 8 7 6 5 4 3 2 A, suits S → D → C → H.
+const RANK_ORDER: Rank[] = ["K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2", "A"];
+const SUIT_ORDER: Suit[] = ["spades", "diamonds", "clubs", "hearts"];
 
-function slotToCard(slot: Slot): Card | null {
-  if (!slot) return null;
-  if (slot === "JOKER") {
-    return { rank: "A", suit: "spades", symbol: "🃏", name: "Joker" };
-  }
-  // Last char is suit, rest is rank.
-  const suit = SUIT_LETTER[slot.charAt(slot.length - 1)];
-  const rank = slot.slice(0, -1) as Rank;
+function cardAtDeckIndex(idx: number): Card {
+  const i = ((idx % 52) + 52) % 52;
+  const suit = SUIT_ORDER[Math.floor(i / 13)];
+  const rank = RANK_ORDER[i % 13];
   return makeCard(rank, suit);
 }
 
 export const FEB_29_FALLBACK: "feb_28" | "march_1" = "feb_28";
 
+const JOKER: Card = { rank: "A", suit: "spades", symbol: "🃏", name: "Joker" };
+
 export function birthCardFor(month: number, day: number): Card {
+  if (month < 1 || month > 12) throw new Error(`Invalid month ${month}`);
+  if (day < 1) throw new Error(`Invalid day ${day} for month ${month}`);
+  if (month === 12 && day === 31) return JOKER;
   if (month === 2 && day === 29) {
-    if (FEB_29_FALLBACK === "feb_28") return birthCardFor(2, 28);
-    return birthCardFor(3, 1);
+    return FEB_29_FALLBACK === "feb_28" ? birthCardFor(2, 28) : birthCardFor(3, 1);
   }
-  const arr = TABLE[month];
-  if (!arr) throw new Error(`Invalid month ${month}`);
-  const slot = arr[day - 1];
-  if (!slot) throw new Error(`No card for ${month}-${day}`);
-  return slotToCard(slot)!;
+  if (day > DAYS_IN_MONTH[month]) {
+    throw new Error(`Invalid day ${day} for month ${month}`);
+  }
+  return cardAtDeckIndex(2 * (month - 1) + (day - 1));
 }

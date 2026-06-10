@@ -10,21 +10,24 @@
 
 ## Tech Debt (code quality)
 
-- [ ] `vercel.ts` imports `@vercel/config` — confirm Vercel's build picks this up (it's a devDep)
+- [ ] `vercel.ts` imports `@vercel/config` — confirm Vercel's build picks this up (devDep); appears unused — consider removing
+- [ ] Migrate from `next lint` (deprecated in Next 16) to direct `eslint .` command
+- [ ] Add CI workflow (`.github/workflows/`) running typecheck + test + lint on PR
+- [ ] Add CHANGELOG.md before public launch
+- [ ] Extract shared constants (`0.9856` solar mean motion, `88°` design arc) used in 3+ calculators
 
 ## Enhancements (nice to have)
 
-- [ ] Topocentric flag — design concurrency: `swe.set_topo` is global state; needs
-      either per-request reset, mutex, or a wrapper that always sets before calc.
-      Mainly affects Moon (~1°) and asteroids; negligible for other planets.
-- [ ] Sidereal zodiac with selectable ayanamsa — needs default ayanamsa choice
-      (Lahiri vs Krishnamurti vs Fagan-Bradley), schema additions, output marker
-- [ ] Astrocartography parans (planetary line crossings)
-- [ ] Solar return chart endpoint
+- [ ] Cards of Destiny Planetary Ruling Card + Karma Cards (needs verified lookup tables)
+- [ ] Topocentric flag — design concurrency for sweph's global `set_topo` state. Mainly affects Moon (~1°)
+- [ ] Sidereal zodiac with selectable ayanamsa (Lahiri / Krishnamurti / Fagan-Bradley)
 - [ ] Synastry / composite chart endpoints
-- [ ] Progressed chart endpoint
-- [ ] Returns for Venus, Mercury, etc.
+- [ ] Solar return chart endpoint — DONE 2026-06-09
+- [ ] Progressed chart endpoint — DONE 2026-06-09
+- [ ] Returns for Venus, Mercury, Jupiter, Saturn
 - [ ] Caching layer (in-memory LRU + Vercel Runtime Cache)
 - [ ] Rate limiting via Vercel Firewall WAF rules
-- [ ] SDK packages (@astro-calculator/client-ts, py)
-- [ ] Add a 4th reference birth chart (current: Diana, Einstein, Jobs)
+- [ ] SDK packages (`@astro-calculator/client-ts`, Python)
+- [ ] Add a 4th reference birth chart fixture (current: Diana, Einstein, Jobs)
+- [ ] Geocoding for `/chart` UI — let users type a city name instead of lat/lon
+- [ ] Render astrocartography lines on an interactive world map in `/chart`

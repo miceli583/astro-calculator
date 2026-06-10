@@ -161,25 +161,125 @@ function profileFromSuns(personalitySun: Activation, designSun: Activation): str
   return `${personalitySun.line}/${designSun.line}`;
 }
 
+// Cross angle is determined by the Profile (Personality Sun line / Design Sun line).
+// Canonical mapping per Ra Uru Hu's HD system: there are 12 valid profiles, each
+// belonging to exactly one of three cross types.
+const CROSS_ANGLE_BY_PROFILE: Record<string, "Right Angle" | "Left Angle" | "Juxtaposition"> = {
+  "1/3": "Right Angle",
+  "1/4": "Right Angle",
+  "2/4": "Right Angle",
+  "2/5": "Right Angle",
+  "3/5": "Right Angle",
+  "3/6": "Right Angle",
+  "4/6": "Right Angle",
+  "4/1": "Juxtaposition",
+  "5/1": "Left Angle",
+  "5/2": "Left Angle",
+  "6/2": "Left Angle",
+  "6/3": "Left Angle",
+};
+
+// HD Variables — canonical color/tone → trait mappings per Ra Uru Hu's PHS
+// (Primary Health System). Direction (Left=Receptive, Right=Strategic) is
+// determined by the tone: tones 1-3 → Left, tones 4-6 → Right.
+const DIGESTION_BY_COLOR: Record<number, string> = {
+  1: "Appetite",
+  2: "Taste",
+  3: "Thirst",
+  4: "Touch",
+  5: "Sound",
+  6: "Light",
+};
+
+const ENVIRONMENT_BY_TONE: Record<number, string> = {
+  1: "Caves",
+  2: "Markets",
+  3: "Kitchens",
+  4: "Mountains",
+  5: "Valleys",
+  6: "Shores",
+};
+
+const PERSPECTIVE_BY_COLOR: Record<number, string> = {
+  1: "Survival",
+  2: "Possibility",
+  3: "Power",
+  4: "Wanting",
+  5: "Probability",
+  6: "Personal",
+};
+
+const MOTIVATION_BY_TONE: Record<number, string> = {
+  1: "Fear",
+  2: "Hope",
+  3: "Desire",
+  4: "Need",
+  5: "Guilt",
+  6: "Innocence",
+};
+
+function directionFromTone(tone: number): "Left" | "Right" {
+  return tone <= 3 ? "Left" : "Right";
+}
+
+function computeVariables(pSun: Activation, dSun: Activation): HumanDesignVariables {
+  return {
+    digestion: {
+      source: "Design Sun",
+      color: dSun.color,
+      name: DIGESTION_BY_COLOR[dSun.color] ?? "Unknown",
+      direction: directionFromTone(dSun.tone),
+    },
+    environment: {
+      source: "Design Sun",
+      tone: dSun.tone,
+      name: ENVIRONMENT_BY_TONE[dSun.tone] ?? "Unknown",
+      direction: directionFromTone(dSun.tone),
+    },
+    perspective: {
+      source: "Personality Sun",
+      color: pSun.color,
+      name: PERSPECTIVE_BY_COLOR[pSun.color] ?? "Unknown",
+      direction: directionFromTone(pSun.tone),
+    },
+    motivation: {
+      source: "Personality Sun",
+      tone: pSun.tone,
+      name: MOTIVATION_BY_TONE[pSun.tone] ?? "Unknown",
+      direction: directionFromTone(pSun.tone),
+    },
+  };
+}
+
 function incarnationCross(
   personalitySun: Activation,
   personalityEarth: Activation,
   designSun: Activation,
   designEarth: Activation
 ): { name: string; gates: [number, number, number, number] } {
-  // Cross is named by the four gates: (P-Sun, P-Earth, D-Sun, D-Earth)
-  // The "angle" (Right/Left/Juxtaposition) is determined by P-Sun.line:
-  //   lines 1, 2, 4, 5 → Right Angle (personal karma)
-  //   lines 3, 6       → Left Angle (transpersonal karma)
-  //   if Personality and Design Sun lines are both odd OR both even (specific
-  //   patterns) → Juxtaposition.
-  const angle = personalitySun.line === 4 ? "Juxtaposition"
-    : [1, 2, 4, 5].includes(personalitySun.line) ? "Right Angle"
-    : "Left Angle";
+  const profile = `${personalitySun.line}/${designSun.line}`;
+  const angle = CROSS_ANGLE_BY_PROFILE[profile] ?? "Right Angle";
   return {
     name: `${angle} Cross of (${personalitySun.gate}/${personalityEarth.gate} | ${designSun.gate}/${designEarth.gate})`,
     gates: [personalitySun.gate, personalityEarth.gate, designSun.gate, designEarth.gate],
   };
+}
+
+/**
+ * The four HD Variables (the "arrows" around the body graph).
+ * Each is derived from the COLOR (1-6) or TONE (1-6) of the Personality Sun
+ * or Design Sun activation. They modify how you ingest information and
+ * experience the world.
+ */
+export interface HumanDesignVariables {
+  /** Top-left arrow: how you take in / digest food. From Design Sun's color. */
+  digestion: { source: "Design Sun"; color: number; name: string; direction: "Left" | "Right" };
+  /** Top-right arrow: optimal environment. From Design Sun's tone. */
+  environment: { source: "Design Sun"; tone: number; name: string; direction: "Left" | "Right" };
+  /** Bottom-left arrow: how you take in information. From Personality Sun's color. */
+  perspective: { source: "Personality Sun"; color: number; name: string; direction: "Left" | "Right" };
+  /** Bottom-right arrow: what drives you. From Personality Sun's tone. */
+  motivation: { source: "Personality Sun"; tone: number; name: string; direction: "Left" | "Right" };
 }
 
 export interface HumanDesignChart {
@@ -192,6 +292,7 @@ export interface HumanDesignChart {
   undefinedCenters: Center[];
   channels: { gates: [number, number]; name: string; centers: [Center, Center] }[];
   incarnationCross: { name: string; gates: [number, number, number, number] };
+  variables: HumanDesignVariables;
   personality: ChartHalf;
   design: ChartHalf;
 }
@@ -300,6 +401,7 @@ export function calculateHumanDesign(input: HumanDesignInput): HumanDesignChart 
     undefinedCenters: undefined_,
     channels: channels.map((c) => ({ gates: c.gates, name: c.name, centers: c.centers })),
     incarnationCross: incarnationCross(pSun, pEarth, dSun, dEarth),
+    variables: computeVariables(pSun, dSun),
     personality: { jd_ut: personalityJd, activations: personalityActs },
     design: { jd_ut: designJd, activations: designActs },
   };

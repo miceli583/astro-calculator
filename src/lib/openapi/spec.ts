@@ -60,6 +60,26 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           responses: { "200": { description: "Transit chart" } },
         },
       },
+      "/api/v1/astrology/progressions": {
+        post: {
+          summary: "Compute secondary-progressed positions ('day for a year')",
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ProgressedInput" } } },
+          },
+          responses: { "200": { description: "Progressed inner-planet positions for the requested age" } },
+        },
+      },
+      "/api/v1/astrology/solar-return": {
+        post: {
+          summary: "Cast a Solar Return chart for a given year",
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { $ref: "#/components/schemas/SolarReturnInput" } } },
+          },
+          responses: { "200": { description: "Full natal-style chart cast at the moment the transit Sun returns to the natal Sun longitude" } },
+        },
+      },
       "/api/v1/astrocartography": {
         post: {
           summary: "Compute astrocartography (planetary lines on Earth)",
@@ -163,9 +183,42 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
                 latitude_step: { type: "number", default: 1, description: "Sampling resolution (degrees)" },
                 min_latitude: { type: "number", default: -85 },
                 max_latitude: { type: "number", default: 85 },
+                include_parans: { type: "boolean", default: true, description: "Include paran (line-crossing) points in the result" },
+                paran_resolution: { type: "number", default: 0.5, description: "Latitude resolution for paran detection (degrees)" },
               },
             },
           ],
+        },
+        ProgressedInput: {
+          allOf: [
+            { $ref: "#/components/schemas/BirthData" },
+            {
+              type: "object",
+              required: ["years"],
+              properties: {
+                years: { type: "number", minimum: 0, maximum: 120, description: "Years after birth (e.g. 28 for 'at age 28'). Fractional values allowed." },
+                planets: { type: "array", items: { type: "string" }, description: "Defaults to Sun, Moon, Mercury, Venus, Mars (inner planets that move meaningfully)" },
+              },
+            },
+          ],
+        },
+        SolarReturnInput: {
+          type: "object",
+          required: ["natal", "year"],
+          properties: {
+            natal: { $ref: "#/components/schemas/NatalInput" },
+            year: { type: "integer", minimum: 1500, maximum: 3500, example: 2026 },
+            relocation: {
+              type: "object",
+              description: "Optional: cast the return chart for a different location (where you will be during the year).",
+              required: ["latitude", "longitude", "timezone"],
+              properties: {
+                latitude: { type: "number", minimum: -90, maximum: 90 },
+                longitude: { type: "number", minimum: -180, maximum: 180 },
+                timezone: { type: "string" },
+              },
+            },
+          },
         },
         DateOnly: {
           type: "object",
