@@ -1,9 +1,11 @@
 import type { NextConfig } from "next";
 
 const config: NextConfig = {
-  serverExternalPackages: ["sweph"],
+  // Packages that ship runtime data files / native modules and don't survive
+  // Next.js's serverless bundling cleanly. Loaded from node_modules at runtime.
+  serverExternalPackages: ["sweph", "tz-lookup"],
   outputFileTracingIncludes: {
-    "/api/**/*": ["./ephemeris/**/*"],
+    "/api/**/*": ["./ephemeris/**/*", "./node_modules/tz-lookup/**/*"],
   },
 };
 
