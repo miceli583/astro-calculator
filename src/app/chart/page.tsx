@@ -19,6 +19,7 @@ import type {
   Paran,
   PlanetLines,
 } from "@/lib/calculators/astrocartography";
+import type { TransitEvent, TransitEventsResult } from "@/lib/calculators/transit-events";
 
 interface BirthForm {
   name: string;
@@ -394,20 +395,311 @@ function fmtSign(s: { sign?: SignPosition } | undefined | null): string {
   return `${s.sign.degree}°${String(s.sign.minute).padStart(2, "0")}' ${s.sign.sign}`;
 }
 
+type ResultsTab = "chart" | "transits";
+
 function ResultsView({ form, r }: { form: BirthForm; r: ChartResults }) {
+  const [tab, setTab] = useState<ResultsTab>("chart");
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <Header form={form} />
-      <SnapshotCard r={r} />
-      <AstrologyCard chart={r.natal} />
-      <HumanDesignCard hd={r.hd} />
-      <GeneKeysCard gk={r.gk} />
-      <NumerologyCard lp={r.lifePath} dc={r.destiny} />
-      <ProgressionsCard prog={r.progressions} />
-      <SolarReturnCard sr={r.solarReturn} />
-      <AstrocartographyCard acg={r.acg} />
+      <TabBar active={tab} onChange={setTab} />
+      {tab === "chart" ? (
+        <>
+          <SnapshotCard r={r} />
+          <AstrologyCard chart={r.natal} />
+          <HumanDesignCard hd={r.hd} />
+          <GeneKeysCard gk={r.gk} />
+          <NumerologyCard lp={r.lifePath} dc={r.destiny} />
+          <ProgressionsCard prog={r.progressions} />
+          <SolarReturnCard sr={r.solarReturn} />
+          <AstrocartographyCard acg={r.acg} />
+        </>
+      ) : (
+        <TransitsTab form={form} />
+      )}
     </div>
   );
+}
+
+function TabBar({ active, onChange }: { active: ResultsTab; onChange: (t: ResultsTab) => void }) {
+  const tabs: { id: ResultsTab; label: string }[] = [
+    { id: "chart", label: "Chart" },
+    { id: "transits", label: "Transits" },
+  ];
+  return (
+    <div style={{ display: "flex", gap: "1.5rem", borderBottom: "1px solid var(--border)" }}>
+      {tabs.map((t) => {
+        const isActive = t.id === active;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => onChange(t.id)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: "0.75rem 0",
+              marginBottom: -1,
+              color: isActive ? "var(--text)" : "var(--muted)",
+              borderBottom: isActive ? "2px solid var(--accent)" : "2px solid transparent",
+              cursor: "pointer",
+              fontSize: 15,
+              fontWeight: isActive ? 600 : 400,
+              letterSpacing: "0.02em",
+              transition: "color 0.15s",
+            }}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const TRANSIT_YEAR_OPTIONS = [1, 3, 5, 10, 20] as const;
+
+function TransitsTab({ form }: { form: BirthForm }) {
+  const [years, setYears] = useState<number>(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [events, setEvents] = useState<TransitEvent[] | null>(null);
+  const [rangeMeta, setRangeMeta] = useState<{ start: string; end: string } | null>(null);
+
+  async function generate() {
+    setLoading(true);
+    setError(null);
+    try {
+      const start = new Date();
+      const end = new Date(start);
+      end.setFullYear(end.getFullYear() + years);
+      const startStr = fmtISODate(start);
+      const endStr = fmtISODate(end);
+      const body = {
+        natal: {
+          datetime: `${form.date}T${form.time}:00`,
+          timezone: form.timezone,
+          latitude: parseFloat(form.latitude),
+          longitude: parseFloat(form.longitude),
+        },
+        start_date: startStr,
+        end_date: endStr,
+      };
+      const result = await callApi<TransitEventsResult>("/api/v1/transit/events", body);
+      setEvents(result.events);
+      setRangeMeta({ start: startStr, end: endStr });
+    } catch (e) {
+      setError((e as Error).message);
+      setEvents(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card title="Transits" accent="⚹">
+      <div
+        className="stack-on-mobile"
+        style={{
+          display: "flex",
+          gap: "1rem",
+          alignItems: "center",
+          flexWrap: "wrap",
+          padding: "0.5rem 0 1.25rem",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        <label style={{ color: "var(--muted)", fontSize: 14 }}>
+          Scan window:{" "}
+          <select
+            value={years}
+            onChange={(e) => setYears(parseInt(e.target.value, 10))}
+            style={{
+              marginLeft: "0.5rem",
+              background: "var(--card)",
+              color: "var(--text)",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              padding: "0.4rem 0.6rem",
+              fontSize: 14,
+            }}
+          >
+            {TRANSIT_YEAR_OPTIONS.map((y) => (
+              <option key={y} value={y}>
+                {y} year{y === 1 ? "" : "s"}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={generate}
+          disabled={loading}
+          style={{
+            background: loading ? "var(--border)" : "var(--accent)",
+            color: loading ? "var(--muted)" : "var(--bg)",
+            border: "none",
+            padding: "0.5rem 1.25rem",
+            borderRadius: 6,
+            fontSize: 14,
+            fontWeight: 500,
+            cursor: loading ? "not-allowed" : "pointer",
+          }}
+        >
+          {loading ? "Computing…" : events ? "Regenerate" : "Generate transits"}
+        </button>
+        {rangeMeta && (
+          <div style={{ color: "var(--muted)", fontSize: 13 }}>
+            {rangeMeta.start} → {rangeMeta.end}
+          </div>
+        )}
+      </div>
+      {error && (
+        <div style={{ color: "#ff8b8b", padding: "1rem 0", fontSize: 14 }}>{error}</div>
+      )}
+      {!events && !loading && !error && (
+        <div style={{ color: "var(--muted)", padding: "1.5rem 0", fontSize: 14 }}>
+          Select a scan window and generate to see your upcoming transit events.
+          The scanner detects when the outer planets (Jupiter, Saturn, Chiron,
+          Uranus, Neptune, Pluto, Nodes) form aspects to your natal chart, and
+          merges retrograde loops into single events with multiple exact-aspect
+          peaks.
+        </div>
+      )}
+      {events && <EventsList events={events} />}
+    </Card>
+  );
+}
+
+function EventsList({ events }: { events: TransitEvent[] }) {
+  if (events.length === 0) {
+    return (
+      <div style={{ color: "var(--muted)", padding: "1.5rem 0", fontSize: 14 }}>
+        No transit events in the selected window with default settings.
+      </div>
+    );
+  }
+  const byYear = new Map<string, TransitEvent[]>();
+  for (const e of events) {
+    const y = e.orbEnter.slice(0, 4);
+    if (!byYear.has(y)) byYear.set(y, []);
+    byYear.get(y)!.push(e);
+  }
+  return (
+    <div>
+      <div style={{ color: "var(--muted)", fontSize: 13, padding: "0.75rem 0 1rem" }}>
+        {events.length} event{events.length === 1 ? "" : "s"} across {byYear.size} year{byYear.size === 1 ? "" : "s"}
+      </div>
+      {[...byYear.entries()].map(([year, evs]) => (
+        <div key={year} style={{ marginBottom: "1.5rem" }}>
+          <h4
+            style={{
+              margin: "0 0 0.75rem",
+              fontSize: 15,
+              letterSpacing: "0.05em",
+              color: "var(--muted)",
+              fontWeight: 500,
+              textTransform: "uppercase",
+            }}
+          >
+            {year} · {evs.length}
+          </h4>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {evs.map((e) => (
+              <EventRow key={e.id} e={e} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EventRow({ e }: { e: TransitEvent }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr auto",
+        gap: "0.5rem 1rem",
+        padding: "0.75rem",
+        borderRadius: 6,
+        background: "var(--bg)",
+        border: "1px solid var(--border)",
+      }}
+    >
+      <div style={{ fontSize: 14, minWidth: 0 }}>
+        <span style={{ fontWeight: 500 }}>{cap(e.transitPlanet)}</span>
+        <span style={{ margin: "0 0.5rem", color: "var(--muted)" }}>{aspSymbol(e.aspect)}</span>
+        <span style={{ fontWeight: 500 }}>natal {cap(e.natalPoint)}</span>
+        <span style={{ color: "var(--muted)" }}>
+          {" "}in {e.natalSign}
+          {e.natalHouse ? ` · house ${e.natalHouse}` : ""}
+        </span>
+        {e.isRetrogradeLoop && (
+          <span
+            style={{
+              marginLeft: "0.75rem",
+              fontSize: 11,
+              padding: "0.1rem 0.5rem",
+              background: "var(--accent)",
+              color: "var(--bg)",
+              borderRadius: 3,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              fontWeight: 600,
+            }}
+          >
+            Rx loop · {e.peaks.length} peaks
+          </span>
+        )}
+      </div>
+      <div
+        style={{
+          fontSize: 12,
+          color: "var(--muted)",
+          fontFamily: "ui-monospace, monospace",
+          textAlign: "right",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {e.orbEnter} → {e.orbLeave}
+      </div>
+      <div
+        style={{
+          gridColumn: "1 / -1",
+          fontSize: 12,
+          color: "var(--muted)",
+          fontFamily: "ui-monospace, monospace",
+        }}
+      >
+        Peak{e.peaks.length === 1 ? "" : "s"}: {e.peaks.join(" · ")}
+      </div>
+    </div>
+  );
+}
+
+function fmtISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function cap(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
+}
+
+function aspSymbol(a: string): string {
+  switch (a) {
+    case "conjunction": return "☌";
+    case "sextile":     return "⚹";
+    case "square":      return "□";
+    case "trine":       return "△";
+    case "quincunx":    return "⚻";
+    case "opposition":  return "☍";
+    default:            return a;
+  }
 }
 
 function Header({ form }: { form: BirthForm }) {
