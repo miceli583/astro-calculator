@@ -1,6 +1,6 @@
 # Status
 
-**Last updated:** 2026-07-02
+**Last updated:** 2026-07-03
 **Last updated by:** Matthew Miceli
 
 ## What works
@@ -40,22 +40,21 @@
 ## Next
 
 - Vercel deploy + ephemeris bundle verification (blocker before public launch)
+- Populate `transit-themes.json` with prose — 4,536-entry manifest is generated; needs LLM pass (see docs/transits-spec.md §7)
+- Composite / Davison midpoint chart endpoint (spec Phase G, deferred)
 - Cards of Destiny Planetary Ruling Card + Karma Cards (needs reference table)
 - Topocentric flag (Moon precision; concurrency design needed for sweph's global `set_topo`)
 - Sidereal zodiac with selectable ayanamsa
-- Synastry / composite chart endpoints
 
 ## Recent changes
 
 | Date       | Author          | Change                                                                                                                                           |
 | ---------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 2026-07-02 | Matthew Miceli  | Transits & synastry suite: shared computeOverlay core, /api/v1/transit + /transit/natal + /transit/events (retrograde loops) + /synastry + /transit/theme scaffolding, 4,536-entry combinations manifest, spec doc |
-| 2026-07-02 | Matthew Miceli  | HD Variables fix (Environment/Perspective/Motivation sourcing), added Cognition/Signature/Not-Self, full 192-entry Incarnation Cross name lookup |
-| 2026-06-09 | Matthew Miceli  | Push to GitHub (miceli583/astro-calculator); city autocomplete with Nominatim + tz-lookup; geocoder endpoint; Einstein default sample; Vercel deploy fixes in progress |
-| 2026-06-09 | Matthew Miceli  | Add parans, Solar Return, Progressions, Part of Fortune, South Node, Black Moon Lilith, HD Variables; fix IC angle + Gene Keys + Destiny Cards; new /chart UI page; quality audit sweep |
-| 2026-05-22 | Matthew Miceli  | Astrocartography AC/DC swap fix; Jobs fixture; high-latitude warnings; full JSDoc; 200→289 tests                                                  |
-| 2026-05-22 | Matthew Miceli  | Comprehensive accuracy test suite (13→200 tests); HD gate offset fixed                                                                            |
-| 2026-05-15 | Matthew Miceli  | Initial scaffold; all endpoints live                                                                                                              |
+| 2026-07-03 | Matthew Miceli  | UI: site nav (Chart/Sky/API), Chart tab bar (Chart/Transits/Synastry), /sky feed page, Synastry sub-tab with Person B form + results; extracted shared BirthFormFields + `.birth-input` CSS class |
+| 2026-07-03 | Matthew Miceli  | Sky-weather calculator + `/api/v1/sky/events` — retrograde stations, moon phases, sign ingresses, eclipse detection (18.5°/12.25° node limits) |
+| 2026-07-03 | Matthew Miceli  | Transits/synastry suite: shared `computeOverlay` core, `/transit`, `/transit/natal`, `/transit/events` (retrograde loops), `/synastry`, `/transit/theme` scaffolding, 4,536-entry combinations manifest, spec doc |
+| 2026-07-03 | Matthew Miceli  | HD Variables fix (Environment/Perspective/Motivation sourcing), added Cognition/Signature/Not-Self, full 192-entry Incarnation Cross name lookup with structural invariant tests |
+| 2026-06-09 | Matthew Miceli  | Push to GitHub, city autocomplete with Nominatim + tz-lookup, geocoder endpoint, Einstein default sample, Vercel deploy fixes in progress                                                    |
 
 ## Known limitations
 
