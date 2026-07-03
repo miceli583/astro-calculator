@@ -682,18 +682,20 @@ function EventRow({ e }: { e: TransitEvent }) {
   );
 }
 
+const SYNASTRY_SAMPLE_B: SharedBirthForm = {
+  name: "Princess Diana",
+  date: "1961-07-01",
+  time: "19:45",
+  timezone: "Europe/London",
+  latitude: "52.8333",
+  longitude: "0.5000",
+};
+
 function SynastryTab({ form: personA }: { form: BirthForm }) {
   // Second person's birth data — separate from the primary chart's form.
-  // Default is Princess Diana as a companion to the Einstein sample so the
+  // Defaults to Diana as a companion to the Einstein primary sample so the
   // "Compute synastry" button works on a fresh visit.
-  const [personB, setPersonB] = useState<SharedBirthForm>({
-    name: "Princess Diana",
-    date: "1961-07-01",
-    time: "19:45",
-    timezone: "Europe/London",
-    latitude: "52.8333",
-    longitude: "0.5000",
-  });
+  const [personB, setPersonB] = useState<SharedBirthForm>(SYNASTRY_SAMPLE_B);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SynastryResult | null>(null);
@@ -707,7 +709,8 @@ function SynastryTab({ form: personA }: { form: BirthForm }) {
     };
   }
 
-  async function generate() {
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
     setLoading(true);
     setError(null);
     try {
@@ -725,53 +728,80 @@ function SynastryTab({ form: personA }: { form: BirthForm }) {
     }
   }
 
-  return (
-    <Card title="Synastry" accent="⚭">
-      <p style={{ margin: "0 0 1.25rem", color: "var(--muted)", fontSize: 14 }}>
-        Compatibility between{" "}
-        <span style={{ color: "var(--fg)" }}>{personA.name || "Person A"}</span>{" "}
-        and a second person. Aspects, HD gate co-activations, and where each
-        one lands in the other&apos;s houses.
-      </p>
+  const personAName = personA.name || "Person A";
+  const personBName = personB.name || "Person B";
 
-      <div
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <div>
+        <div style={{ color: "var(--muted)", fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          Synastry
+        </div>
+        <h2 style={{ margin: "0.3rem 0 0.4rem", fontSize: "1.7rem", letterSpacing: "-0.02em" }}>
+          {personAName} <span style={{ color: "var(--accent)", margin: "0 0.35rem" }}>⚭</span> …
+        </h2>
+        <p style={{ color: "var(--muted)", margin: 0, fontSize: 14 }}>
+          Enter a second person&apos;s birth data. Returns inter-chart aspects, HD gate co-activations, and both directions of house overlays.
+        </p>
+      </div>
+
+      <form
+        onSubmit={handleSubmit}
+        aria-busy={loading}
         style={{
-          borderTop: "1px solid var(--border)",
-          paddingTop: "1.25rem",
-          marginBottom: "1.25rem",
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          padding: "1.5rem",
         }}
       >
-        <div style={{ color: "var(--muted)", fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+        <div style={{ color: "var(--muted)", fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "1rem" }}>
           Person B
         </div>
         <BirthFormFields value={personB} onChange={setPersonB} idPrefix="synastry-b" />
-      </div>
+        <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              background: "var(--accent)",
+              color: "#1a1535",
+              border: 0,
+              borderRadius: 8,
+              padding: "0.75rem 1.4rem",
+              fontWeight: 600,
+              cursor: loading ? "wait" : "pointer",
+              opacity: loading ? 0.6 : 1,
+              fontSize: 15,
+              minHeight: 44,
+            }}
+          >
+            {loading ? "Computing…" : result ? "Recompute synastry" : "Compute synastry"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setPersonB(SYNASTRY_SAMPLE_B)}
+            style={{
+              background: "transparent",
+              color: "var(--muted)",
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+              padding: "0.7rem 1rem",
+              cursor: "pointer",
+              fontSize: 14,
+              minHeight: 44,
+            }}
+          >
+            Reset to sample
+          </button>
+          {error && (
+            <span role="alert" style={{ color: "#ff6b6b", marginLeft: "0.5rem", fontSize: 14 }}>{error}</span>
+          )}
+        </div>
+      </form>
 
-      <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-        <button
-          type="button"
-          onClick={generate}
-          disabled={loading}
-          style={{
-            background: loading ? "var(--border)" : "var(--accent)",
-            color: loading ? "var(--muted)" : "#1a1535",
-            border: 0,
-            padding: "0.65rem 1.4rem",
-            borderRadius: 8,
-            fontWeight: 600,
-            cursor: loading ? "not-allowed" : "pointer",
-            fontSize: 14,
-          }}
-        >
-          {loading ? "Computing…" : result ? "Recompute" : "Compute synastry"}
-        </button>
-        {error && (
-          <span role="alert" style={{ color: "#ff6b6b", fontSize: 14 }}>{error}</span>
-        )}
-      </div>
-
-      {result && <SynastryResultView result={result} personAName={personA.name || "Person A"} personBName={personB.name || "Person B"} />}
-    </Card>
+      {result && <SynastryResultView result={result} personAName={personAName} personBName={personBName} />}
+    </div>
   );
 }
 
@@ -785,11 +815,17 @@ function SynastryResultView({
   personBName: string;
 }) {
   return (
-    <div style={{ marginTop: "1.75rem", borderTop: "1px solid var(--border)", paddingTop: "1.5rem" }}>
-      <SynastryAspectsSection result={result} personAName={personAName} personBName={personBName} />
-      <SynastryHouseOverlaySection result={result} personAName={personAName} personBName={personBName} />
-      <SynastryHdSection result={result} personAName={personAName} personBName={personBName} />
-    </div>
+    <>
+      <Card title="Inter-chart aspects" accent="⚭">
+        <SynastryAspectsSection result={result} personAName={personAName} personBName={personBName} />
+      </Card>
+      <Card title="House overlays" accent="⌂">
+        <SynastryHouseOverlaySection result={result} personAName={personAName} personBName={personBName} />
+      </Card>
+      <Card title="Human Design co-activations" accent="◈">
+        <SynastryHdSection result={result} personAName={personAName} personBName={personBName} />
+      </Card>
+    </>
   );
 }
 
@@ -803,48 +839,45 @@ function SynastryAspectsSection({
   personBName: string;
 }) {
   const aspects = [...result.aspects].sort((a, b) => a.orb - b.orb);
+  if (aspects.length === 0) {
+    return <div style={{ color: "var(--muted)", fontSize: 14 }}>No aspects within default orbs.</div>;
+  }
   return (
-    <div style={{ marginBottom: "1.75rem" }}>
-      <h4 style={{ margin: "0 0 0.75rem", fontSize: 13, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 500 }}>
-        Inter-chart aspects · {aspects.length}
-      </h4>
-      {aspects.length === 0 ? (
-        <div style={{ color: "var(--muted)", fontSize: 14 }}>No aspects within default orbs.</div>
-      ) : (
-        <div>
-          {aspects.slice(0, 40).map((a, i) => (
-            <div
-              key={`${a.transitPoint}-${a.natalPoint}-${a.aspect}-${i}`}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr auto",
-                gap: "0.5rem 1rem",
-                padding: "0.55rem 0",
-                borderBottom: "1px solid var(--border)",
-                fontSize: 14,
-              }}
-            >
-              <div>
-                <span style={{ color: "var(--muted)" }}>{personBName}&apos;s</span>{" "}
-                <span style={{ fontWeight: 500 }}>{cap(a.transitPoint)}</span>
-                <span style={{ margin: "0 0.5rem", color: "var(--accent)" }}>{aspSymbol(a.aspect)}</span>
-                <span style={{ color: "var(--muted)" }}>{personAName}&apos;s</span>{" "}
-                <span style={{ fontWeight: 500 }}>{cap(a.natalPoint)}</span>
-                {a.natalSign && <span style={{ color: "var(--muted)" }}> in {a.natalSign}</span>}
-              </div>
-              <div style={{ color: "var(--muted)", fontFamily: "ui-monospace, monospace", fontSize: 12 }}>
-                orb {a.orb.toFixed(1)}°
-              </div>
-            </div>
-          ))}
-          {aspects.length > 40 && (
-            <div style={{ color: "var(--muted)", fontSize: 12, marginTop: "0.75rem", fontStyle: "italic" }}>
-              Showing 40 tightest of {aspects.length} · tighten orbs for a shorter list.
-            </div>
-          )}
+    <>
+      <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: "0.5rem" }}>
+        {aspects.length} aspect{aspects.length === 1 ? "" : "s"} · showing tightest first
+      </div>
+      {aspects.slice(0, 40).map((a, i) => (
+        <div
+          key={`${a.transitPoint}-${a.natalPoint}-${a.aspect}-${i}`}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr auto",
+            gap: "0.5rem 1rem",
+            padding: "0.55rem 0",
+            borderBottom: "1px solid var(--border)",
+            fontSize: 14,
+          }}
+        >
+          <div>
+            <span style={{ color: "var(--muted)" }}>{personBName}&apos;s</span>{" "}
+            <span style={{ fontWeight: 500 }}>{cap(a.transitPoint)}</span>
+            <span style={{ margin: "0 0.5rem", color: "var(--accent)" }}>{aspSymbol(a.aspect)}</span>
+            <span style={{ color: "var(--muted)" }}>{personAName}&apos;s</span>{" "}
+            <span style={{ fontWeight: 500 }}>{cap(a.natalPoint)}</span>
+            {a.natalSign && <span style={{ color: "var(--muted)" }}> in {a.natalSign}</span>}
+          </div>
+          <div style={{ color: "var(--muted)", fontFamily: "ui-monospace, monospace", fontSize: 12 }}>
+            orb {a.orb.toFixed(1)}°
+          </div>
+        </div>
+      ))}
+      {aspects.length > 40 && (
+        <div style={{ color: "var(--muted)", fontSize: 12, marginTop: "0.75rem", fontStyle: "italic" }}>
+          Showing 40 tightest of {aspects.length} · tighten orbs for a shorter list.
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -858,20 +891,15 @@ function SynastryHouseOverlaySection({
   personBName: string;
 }) {
   return (
-    <div style={{ marginBottom: "1.75rem" }}>
-      <h4 style={{ margin: "0 0 0.75rem", fontSize: 13, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 500 }}>
-        House overlays
-      </h4>
-      <div className="stack-on-mobile" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
-        <HouseOverlayColumn
-          heading={`${personBName}'s planets in ${personAName}'s houses`}
-          overlays={result.bOnA.houseOverlays}
-        />
-        <HouseOverlayColumn
-          heading={`${personAName}'s planets in ${personBName}'s houses`}
-          overlays={result.aOnB.houseOverlays}
-        />
-      </div>
+    <div className="stack-on-mobile" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+      <HouseOverlayColumn
+        heading={`${personBName}'s planets in ${personAName}'s houses`}
+        overlays={result.bOnA.houseOverlays}
+      />
+      <HouseOverlayColumn
+        heading={`${personAName}'s planets in ${personBName}'s houses`}
+        overlays={result.aOnB.houseOverlays}
+      />
     </div>
   );
 }
@@ -928,28 +956,23 @@ function SynastryHdSection({
   // an HD connection-chart activation.
   const bActivatesA = result.bOnA.hdActivations.filter((a) => a.natalPointSharingGate !== "");
   const aActivatesB = result.aOnB.hdActivations.filter((a) => a.natalPointSharingGate !== "");
-  const nothing = bActivatesA.length === 0 && aActivatesB.length === 0;
+  if (bActivatesA.length === 0 && aActivatesB.length === 0) {
+    return (
+      <div style={{ color: "var(--muted)", fontSize: 14 }}>
+        No shared-gate activations between the two charts.
+      </div>
+    );
+  }
   return (
-    <div>
-      <h4 style={{ margin: "0 0 0.75rem", fontSize: 13, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 500 }}>
-        Human Design co-activations
-      </h4>
-      {nothing ? (
-        <div style={{ color: "var(--muted)", fontSize: 13 }}>
-          No shared-gate activations between the two charts.
-        </div>
-      ) : (
-        <div className="stack-on-mobile" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
-          <HdColumn
-            heading={`${personBName} lands on ${personAName}'s gates`}
-            activations={bActivatesA}
-          />
-          <HdColumn
-            heading={`${personAName} lands on ${personBName}'s gates`}
-            activations={aActivatesB}
-          />
-        </div>
-      )}
+    <div className="stack-on-mobile" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+      <HdColumn
+        heading={`${personBName} lands on ${personAName}'s gates`}
+        activations={bActivatesA}
+      />
+      <HdColumn
+        heading={`${personAName} lands on ${personBName}'s gates`}
+        activations={aActivatesB}
+      />
     </div>
   );
 }
