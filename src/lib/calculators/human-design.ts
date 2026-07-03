@@ -18,6 +18,7 @@ import {
   type PlanetName,
 } from "../ephemeris/client";
 import { longitudeToGate, type GateActivation } from "../constants/hd-gates";
+import { crossThemeName } from "../constants/hd-crosses";
 import {
   ALL_CENTERS,
   CHANNELS,
@@ -179,9 +180,15 @@ const CROSS_ANGLE_BY_PROFILE: Record<string, "Right Angle" | "Left Angle" | "Jux
   "6/3": "Left Angle",
 };
 
-// HD Variables — canonical color/tone → trait mappings per Ra Uru Hu's PHS
-// (Primary Health System). Direction (Left=Receptive, Right=Strategic) is
-// determined by the tone: tones 1-3 → Left, tones 4-6 → Right.
+// HD Variables — canonical color → trait mappings per Ra Uru Hu's PHS.
+// All four variables are sourced from the COLOR of their point (verified by
+// reverse-engineering a MyBodyGraph reference chart 1998-04-08 06:30 New Orleans):
+//   Digestion   ← Design Sun COLOR         (body, top-left)
+//   Environment ← Design North Node COLOR  (body, bottom-left)
+//   Perspective ← Personality N Node COLOR (mind, bottom-right)
+//   Motivation  ← Personality Sun COLOR    (mind, top-right)
+// Direction (Left=Strategic, Right=Receptive) comes from the TONE of the same
+// point: tones 1-3 → Left, tones 4-6 → Right.
 const DIGESTION_BY_COLOR: Record<number, string> = {
   1: "Appetite",
   2: "Taste",
@@ -191,7 +198,7 @@ const DIGESTION_BY_COLOR: Record<number, string> = {
   6: "Light",
 };
 
-const ENVIRONMENT_BY_TONE: Record<number, string> = {
+const ENVIRONMENT_BY_COLOR: Record<number, string> = {
   1: "Caves",
   2: "Markets",
   3: "Kitchens",
@@ -209,7 +216,7 @@ const PERSPECTIVE_BY_COLOR: Record<number, string> = {
   6: "Personal",
 };
 
-const MOTIVATION_BY_TONE: Record<number, string> = {
+const MOTIVATION_BY_COLOR: Record<number, string> = {
   1: "Fear",
   2: "Hope",
   3: "Desire",
@@ -218,11 +225,30 @@ const MOTIVATION_BY_TONE: Record<number, string> = {
   6: "Innocence",
 };
 
+// Cognition (Design Sense) — the 5th PHS variable. Sourcing: Design Sun TONE.
+// Verified against two MyBodyGraph reference charts (1998-04-08 New Orleans and
+// 1974-01-03 Stockholm) where D.Sun.tone = 6 in both cases correctly produces
+// "Touch". A third chart with a different D.Sun.tone would independently
+// confirm the Sense wheel ordering below.
+const COGNITION_BY_TONE: Record<number, string> = {
+  1: "Smell",
+  2: "Taste",
+  3: "Outer Vision",
+  4: "Inner Vision",
+  5: "Feeling",
+  6: "Touch",
+};
+
 function directionFromTone(tone: number): "Left" | "Right" {
   return tone <= 3 ? "Left" : "Right";
 }
 
-function computeVariables(pSun: Activation, dSun: Activation): HumanDesignVariables {
+function computeVariables(
+  pSun: Activation,
+  dSun: Activation,
+  pNode: Activation,
+  dNode: Activation
+): HumanDesignVariables {
   return {
     digestion: {
       source: "Design Sun",
@@ -231,25 +257,47 @@ function computeVariables(pSun: Activation, dSun: Activation): HumanDesignVariab
       direction: directionFromTone(dSun.tone),
     },
     environment: {
-      source: "Design Sun",
-      tone: dSun.tone,
-      name: ENVIRONMENT_BY_TONE[dSun.tone] ?? "Unknown",
-      direction: directionFromTone(dSun.tone),
+      source: "Design North Node",
+      color: dNode.color,
+      name: ENVIRONMENT_BY_COLOR[dNode.color] ?? "Unknown",
+      direction: directionFromTone(dNode.tone),
     },
     perspective: {
-      source: "Personality Sun",
-      color: pSun.color,
-      name: PERSPECTIVE_BY_COLOR[pSun.color] ?? "Unknown",
-      direction: directionFromTone(pSun.tone),
+      source: "Personality North Node",
+      color: pNode.color,
+      name: PERSPECTIVE_BY_COLOR[pNode.color] ?? "Unknown",
+      direction: directionFromTone(pNode.tone),
     },
     motivation: {
       source: "Personality Sun",
-      tone: pSun.tone,
-      name: MOTIVATION_BY_TONE[pSun.tone] ?? "Unknown",
+      color: pSun.color,
+      name: MOTIVATION_BY_COLOR[pSun.color] ?? "Unknown",
       direction: directionFromTone(pSun.tone),
+    },
+    cognition: {
+      source: "Design Sun",
+      tone: dSun.tone,
+      name: COGNITION_BY_TONE[dSun.tone] ?? "Unknown",
     },
   };
 }
+
+// Signature (aligned) and Not-Self (misaligned) themes are deterministic by Type.
+const SIGNATURE_BY_TYPE: Record<HumanDesignType, string> = {
+  Manifestor: "Peace",
+  Generator: "Satisfaction",
+  "Manifesting Generator": "Satisfaction",
+  Projector: "Success",
+  Reflector: "Surprise",
+};
+
+const NOT_SELF_BY_TYPE: Record<HumanDesignType, string> = {
+  Manifestor: "Anger",
+  Generator: "Frustration",
+  "Manifesting Generator": "Frustration",
+  Projector: "Bitterness",
+  Reflector: "Disappointment",
+};
 
 function incarnationCross(
   personalitySun: Activation,
@@ -259,27 +307,31 @@ function incarnationCross(
 ): { name: string; gates: [number, number, number, number] } {
   const profile = `${personalitySun.line}/${designSun.line}`;
   const angle = CROSS_ANGLE_BY_PROFILE[profile] ?? "Right Angle";
+  const theme = crossThemeName(personalitySun.gate, angle);
   return {
-    name: `${angle} Cross of (${personalitySun.gate}/${personalityEarth.gate} | ${designSun.gate}/${designEarth.gate})`,
+    name: `${angle} Cross of ${theme} (${personalitySun.gate}/${personalityEarth.gate} | ${designSun.gate}/${designEarth.gate})`,
     gates: [personalitySun.gate, personalityEarth.gate, designSun.gate, designEarth.gate],
   };
 }
 
 /**
- * The four HD Variables (the "arrows" around the body graph).
- * Each is derived from the COLOR (1-6) or TONE (1-6) of the Personality Sun
- * or Design Sun activation. They modify how you ingest information and
- * experience the world.
+ * PHS Variables — the "arrows" around the body graph plus Cognition (Sense).
+ * The four arrow traits are sourced from the COLOR of their point; the arrow's
+ * direction is determined by the TONE of the same point (tones 1-3 → Left,
+ * tones 4-6 → Right). Cognition has no arrow direction — it's the tone of
+ * the Design Sun mapped through the Sense wheel.
  */
 export interface HumanDesignVariables {
-  /** Top-left arrow: how you take in / digest food. From Design Sun's color. */
+  /** Top-left arrow: dietary regimen. From Design Sun's color. */
   digestion: { source: "Design Sun"; color: number; name: string; direction: "Left" | "Right" };
-  /** Top-right arrow: optimal environment. From Design Sun's tone. */
-  environment: { source: "Design Sun"; tone: number; name: string; direction: "Left" | "Right" };
-  /** Bottom-left arrow: how you take in information. From Personality Sun's color. */
-  perspective: { source: "Personality Sun"; color: number; name: string; direction: "Left" | "Right" };
-  /** Bottom-right arrow: what drives you. From Personality Sun's tone. */
-  motivation: { source: "Personality Sun"; tone: number; name: string; direction: "Left" | "Right" };
+  /** Bottom-left arrow: optimal environment. From Design North Node's color. */
+  environment: { source: "Design North Node"; color: number; name: string; direction: "Left" | "Right" };
+  /** Bottom-right arrow: how the mind takes in information. From Personality North Node's color. */
+  perspective: { source: "Personality North Node"; color: number; name: string; direction: "Left" | "Right" };
+  /** Top-right arrow: underlying mental drive. From Personality Sun's color. */
+  motivation: { source: "Personality Sun"; color: number; name: string; direction: "Left" | "Right" };
+  /** Design Sense / sensory pathway. From Design Sun's tone. */
+  cognition: { source: "Design Sun"; tone: number; name: string };
 }
 
 export interface HumanDesignChart {
@@ -293,6 +345,10 @@ export interface HumanDesignChart {
   channels: { gates: [number, number]; name: string; centers: [Center, Center] }[];
   incarnationCross: { name: string; gates: [number, number, number, number] };
   variables: HumanDesignVariables;
+  /** Aligned-state theme, determined by type. Manifestor=Peace, Generator/MG=Satisfaction, Projector=Success, Reflector=Surprise. */
+  signature: string;
+  /** Misaligned-state theme, determined by type. Manifestor=Anger, Generator/MG=Frustration, Projector=Bitterness, Reflector=Disappointment. */
+  notSelfTheme: string;
   personality: ChartHalf;
   design: ChartHalf;
 }
@@ -388,8 +444,10 @@ export function calculateHumanDesign(input: HumanDesignInput): HumanDesignChart 
 
   const pSun = personalityActs.find((a) => a.planet === "sun")!;
   const pEarth = personalityActs.find((a) => a.planet === "earth")!;
+  const pNode = personalityActs.find((a) => a.planet === "true_node")!;
   const dSun = designActs.find((a) => a.planet === "sun")!;
   const dEarth = designActs.find((a) => a.planet === "earth")!;
+  const dNode = designActs.find((a) => a.planet === "true_node")!;
 
   return {
     type,
@@ -401,7 +459,9 @@ export function calculateHumanDesign(input: HumanDesignInput): HumanDesignChart 
     undefinedCenters: undefined_,
     channels: channels.map((c) => ({ gates: c.gates, name: c.name, centers: c.centers })),
     incarnationCross: incarnationCross(pSun, pEarth, dSun, dEarth),
-    variables: computeVariables(pSun, dSun),
+    variables: computeVariables(pSun, dSun, pNode, dNode),
+    signature: SIGNATURE_BY_TYPE[type],
+    notSelfTheme: NOT_SELF_BY_TYPE[type],
     personality: { jd_ut: personalityJd, activations: personalityActs },
     design: { jd_ut: designJd, activations: designActs },
   };

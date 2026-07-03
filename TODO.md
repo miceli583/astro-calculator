@@ -17,6 +17,8 @@
 
 ## Enhancements (nice to have)
 
+- [ ] HD PHS sub-labels — MyBodyGraph shows Digestion labels like "Buzzing (Nervous Touch)" and directional labels like "Direct"/"InDirect" for the arrows. These map to color+tone+base sub-classifications; would need lookup tables per variable.
+- [ ] Verify J (Juxtaposition) cross names against MyBodyGraph — RA and LA names are structurally cross-verified via quaternary invariants; J entries are per-source only (some sources had errors we caught for gates 59-64, others may exist).
 - [ ] Sabian Symbols — 360-degree symbolic image per zodiac degree (Marc Edmund Jones / Elsie Wheeler). Map every planet position to its Sabian symbol; needs the canonical 360-entry table.
 - [ ] Cards of Destiny Planetary Ruling Card + Karma Cards (needs verified lookup tables)
 - [ ] Topocentric flag — design concurrency for sweph's global `set_topo` state. Mainly affects Moon (~1°)

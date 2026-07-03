@@ -545,6 +545,8 @@ function HumanDesignCard({ hd }: { hd: HumanDesignChart }) {
       <KV k="Authority" v={hd.authority} />
       <KV k="Profile" v={hd.profile} />
       <KV k="Definition" v={hd.definition} />
+      <KV k="Signature" v={hd.signature} />
+      <KV k="Not-Self theme" v={hd.notSelfTheme} />
       <KV k="Defined centers" v={hd.definedCenters.join(", ")} />
       <KV k="Channels" v={hd.channels.map((c) => `${c.gates[0]}-${c.gates[1]} ${c.name}`).join(" · ")} />
       <KV k="Incarnation Cross" v={hd.incarnationCross.name} />
@@ -554,6 +556,7 @@ function HumanDesignCard({ hd }: { hd: HumanDesignChart }) {
         <KV k="Environment" v={`${hd.variables.environment.name} · ${hd.variables.environment.direction}`} />
         <KV k="Perspective" v={`${hd.variables.perspective.name} · ${hd.variables.perspective.direction}`} />
         <KV k="Motivation" v={`${hd.variables.motivation.name} · ${hd.variables.motivation.direction}`} />
+        <KV k="Cognition (Sense)" v={hd.variables.cognition.name} />
       </div>
     </Card>
   );
