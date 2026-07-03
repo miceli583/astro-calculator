@@ -69,6 +69,59 @@ export const progressedInputSchema = birthDataSchema.extend({
   planets: z.array(planetEnum).optional(),
 });
 
+export const aspectTypeSchema = z.enum([
+  "conjunction",
+  "sextile",
+  "square",
+  "trine",
+  "quincunx",
+  "opposition",
+]);
+
+const orbOverrideSchema = z
+  .object({
+    conjunction: z.number().min(0).max(15).optional(),
+    sextile: z.number().min(0).max(15).optional(),
+    square: z.number().min(0).max(15).optional(),
+    trine: z.number().min(0).max(15).optional(),
+    quincunx: z.number().min(0).max(15).optional(),
+    opposition: z.number().min(0).max(15).optional(),
+  })
+  .partial();
+
+export const transitSkyInputSchema = z.object({
+  datetime: z.string().regex(ISO_DATETIME),
+  timezone: z.string().min(1),
+  planets: z.array(planetEnum).optional(),
+});
+
+export const transitToNatalInputSchema = z.object({
+  natal: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
+  transit_datetime: z.string().regex(ISO_DATETIME),
+  transit_timezone: z.string().min(1),
+  transit_planets: z.array(planetEnum).optional(),
+  aspects: z.array(aspectTypeSchema).optional(),
+  orbs: orbOverrideSchema.optional(),
+});
+
+export const transitEventsInputSchema = z.object({
+  natal: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
+  start_date: z.string().regex(ISO_DATE),
+  end_date: z.string().regex(ISO_DATE),
+  transit_planets: z.array(planetEnum).optional(),
+  natal_points: z.array(z.string()).optional(),
+  aspects: z.array(aspectTypeSchema).optional(),
+  orbs: orbOverrideSchema.optional(),
+  step_days: z.number().int().min(1).max(30).optional(),
+});
+
+export const synastryInputSchema = z.object({
+  personA: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
+  personB: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
+  aspects: z.array(aspectTypeSchema).optional(),
+  orbs: orbOverrideSchema.optional(),
+});
+
 export const geocodeInputSchema = z.object({
   query: z.string().min(2).max(200),
   limit: z.number().int().min(1).max(10).optional(),
@@ -98,6 +151,12 @@ export const astrocartoInputSchema = birthDataSchema.extend({
 export const humanDesignInputSchema = birthDataSchema;
 
 export const geneKeysInputSchema = birthDataSchema;
+
+export type AspectType = z.infer<typeof aspectTypeSchema>;
+export type TransitSkyInput = z.infer<typeof transitSkyInputSchema>;
+export type TransitToNatalInput = z.infer<typeof transitToNatalInputSchema>;
+export type TransitEventsInput = z.infer<typeof transitEventsInputSchema>;
+export type SynastryInput = z.infer<typeof synastryInputSchema>;
 
 export type BirthDataInput = z.infer<typeof birthDataSchema>;
 export type DateOnlyInput = z.infer<typeof dateOnlySchema>;

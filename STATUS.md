@@ -1,13 +1,13 @@
 # Status
 
-**Last updated:** 2026-06-09
+**Last updated:** 2026-07-02
 **Last updated by:** Matthew Miceli
 
 ## What works
 
 - Project scaffold: Next.js 16, TypeScript strict, AGPL-3.0
 - Swiss Ephemeris wrapper with auto-download of data files
-- **9 REST endpoints live** at `/api/v1/*` with Zod validation
+- **14 REST endpoints live** at `/api/v1/*` with Zod validation, including the new transit + synastry suite
 - Calculators (all verified end-to-end against external references):
   - **Astrology** — natal positions, house cusps (7 systems), aspects, **Part of Fortune**, **South Node** (verified ±2' vs Astrodienst)
   - **Astrocartography** — MC/IC/AC/DC lines per planet, **parans (line-crossing points)** (verified via independent spherical-astronomy math)
@@ -17,9 +17,11 @@
   - **Destiny Card** — Robert Lee Camp Solar Spread (verified against published chart)
   - **Solar Return** — cast for any year, optionally relocated
   - **Secondary Progressions** — "day for a year" for inner planets
+  - **Transits** — sky snapshot, transit-to-natal overlay, and multi-year event scanner with retrograde-loop detection
+  - **Synastry** — chart-to-chart compatibility built on the shared `computeOverlay` core
 - **`/chart` UI page** — interactive form that fires all calculators and renders a full chart
 - Swagger UI at `/docs`, OpenAPI 3.1 spec at `/api/openapi.json`
-- **326/326 unit tests passing** including:
+- **374/374 unit tests passing** including:
   - 25 planet-position accuracy tests vs Astrodienst (Diana + Jobs)
   - 11 Sun-position cross-checks via independent Meeus VSOP (1879–2024)
   - 45 house-cusp tests across 7 systems
@@ -46,6 +48,8 @@
 
 | Date       | Author          | Change                                                                                                                                           |
 | ---------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-07-02 | Matthew Miceli  | Transits & synastry suite: shared computeOverlay core, /api/v1/transit + /transit/natal + /transit/events (retrograde loops) + /synastry + /transit/theme scaffolding, 4,536-entry combinations manifest, spec doc |
+| 2026-07-02 | Matthew Miceli  | HD Variables fix (Environment/Perspective/Motivation sourcing), added Cognition/Signature/Not-Self, full 192-entry Incarnation Cross name lookup |
 | 2026-06-09 | Matthew Miceli  | Push to GitHub (miceli583/astro-calculator); city autocomplete with Nominatim + tz-lookup; geocoder endpoint; Einstein default sample; Vercel deploy fixes in progress |
 | 2026-06-09 | Matthew Miceli  | Add parans, Solar Return, Progressions, Part of Fortune, South Node, Black Moon Lilith, HD Variables; fix IC angle + Gene Keys + Destiny Cards; new /chart UI page; quality audit sweep |
 | 2026-05-22 | Matthew Miceli  | Astrocartography AC/DC swap fix; Jobs fixture; high-latitude warnings; full JSDoc; 200→289 tests                                                  |

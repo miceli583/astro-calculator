@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "ephe:download": "node scripts/download-ephemeris.mjs",
+    "transits:generate-combinations": "node scripts/generate-transit-combinations.mjs",
     "postinstall": "node scripts/download-ephemeris.mjs --quiet"
   },
   "dependencies": {

@@ -60,6 +60,52 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           responses: { "200": { description: "Transit chart" } },
         },
       },
+      "/api/v1/transit": {
+        post: {
+          summary: "Sky snapshot — planet positions at a datetime (no natal chart)",
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
+          },
+          responses: { "200": { description: "Planet longitudes, signs, and HD gates for the given moment" } },
+        },
+      },
+      "/api/v1/transit/natal": {
+        post: {
+          summary: "Transit-to-natal overlay: current-sky aspects + HD activations + house overlays for a natal chart",
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
+          },
+          responses: { "200": { description: "Natal chart, transit sky, and overlay (aspects, hdActivations, houseOverlays)" } },
+        },
+      },
+      "/api/v1/transit/events": {
+        post: {
+          summary: "Scan a date range for transit events (aspect windows + retrograde loops)",
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
+          },
+          responses: { "200": { description: "Chronologically sorted array of events, each with orbEnter/orbLeave dates and exact-aspect peaks (multiple for retrograde loops)" } },
+        },
+      },
+      "/api/v1/transit/theme": {
+        get: {
+          summary: "Look up prose theme for a specific (transitPlanet, aspect, natalPoint, natalSign) key",
+          responses: { "200": { description: "Theme entry (may be unpopulated if prose generation hasn't run yet)" } },
+        },
+      },
+      "/api/v1/synastry": {
+        post: {
+          summary: "Compatibility / connection chart between two people's natal charts",
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
+          },
+          responses: { "200": { description: "Both natal charts plus bidirectional overlays (bOnA and aOnB)" } },
+        },
+      },
       "/api/v1/astrology/progressions": {
         post: {
           summary: "Compute secondary-progressed positions ('day for a year')",
