@@ -32,7 +32,7 @@ function sunApparentLongitudeMeeus(jdUt: number): number {
   L0 = ((L0 % 360) + 360) % 360;
 
   // Mean anomaly of the Sun
-  let M = 357.52911 + 35999.05029 * T - 0.0001537 * T * T;
+  const M = 357.52911 + 35999.05029 * T - 0.0001537 * T * T;
   const Mrad = M * RAD;
 
   // Equation of center

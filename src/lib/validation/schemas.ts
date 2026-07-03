@@ -149,6 +149,29 @@ export const solarReturnInputSchema = z.object({
     .optional(),
 });
 
+export const returnPlanetSchema = z.enum([
+  "sun",
+  "mercury",
+  "venus",
+  "mars",
+  "jupiter",
+  "saturn",
+]);
+
+export const planetaryReturnInputSchema = z.object({
+  natal: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
+  planet: returnPlanetSchema,
+  after_datetime: z.string().regex(ISO_DATETIME).optional(),
+  after_timezone: z.string().optional(),
+  relocation: z
+    .object({
+      latitude: z.number().min(-90).max(90),
+      longitude: z.number().min(-180).max(180),
+      timezone: z.string(),
+    })
+    .optional(),
+});
+
 export const astrocartoInputSchema = birthDataSchema.extend({
   planets: z.array(planetEnum).optional(),
   latitude_step: z.number().positive().max(10).optional(),

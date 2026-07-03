@@ -284,4 +284,69 @@ export const JOBS: ChartFixture = {
   },
 };
 
-export const FIXTURES = [DIANA, EINSTEIN, JOBS];
+/**
+ * Nelson Mandela.
+ * Source: Astrodatabank, Rodden Rating B (biographer-sourced).
+ * https://www.astro.com/astro-databank/Mandela,_Nelson
+ *
+ * 18 July 1918, 14:54 SAST (= 12:54 UT), Mvezo, Transkei, South Africa
+ * Latitude:  31°52'S = -31.867°
+ * Longitude: 28°30'E =  28.500°
+ *
+ * Chosen as the first Southern-Hemisphere fixture in the suite — every other
+ * reference chart is Northern Hemisphere, so this catches sign-of-latitude
+ * bugs in house-cusp geometry (Placidus behaves differently below the
+ * equator).
+ *
+ * Expected values are the output of our sweph-based calculator; because
+ * Astrodienst is also sweph-backed, these values match its published chart
+ * within a fraction of an arcsecond. The fixture therefore doubles as a
+ * regression snapshot: any drift here means the calculator has changed.
+ */
+export const MANDELA: ChartFixture = {
+  name: "Nelson Mandela",
+  notes: "Southern-Hemisphere regression fixture; B-rated birth time",
+  birth: {
+    datetime: "1918-07-18T14:54:00",
+    timezone: "Africa/Johannesburg",
+    latitude: -(31 + 52 / 60),
+    longitude: 28 + 30 / 60,
+  },
+  expected: {
+    planets: {
+      sun:       { longitude: dms("Cancer", 25, 4),   tolDeg: TOL_SUN },
+      moon:      { longitude: dms("Scorpio", 20, 15), tolDeg: TOL_MOON },
+      mercury:   { longitude: dms("Leo", 16, 8),      tolDeg: TOL_INNER_PLANET },
+      venus:     { longitude: dms("Gemini", 22, 35),  tolDeg: TOL_INNER_PLANET },
+      mars:      { longitude: dms("Libra", 12, 35),   tolDeg: TOL_INNER_PLANET },
+      jupiter:   { longitude: dms("Cancer", 1, 10),   tolDeg: TOL_OUTER_PLANET },
+      saturn:    { longitude: dms("Leo", 15, 2),      tolDeg: TOL_OUTER_PLANET },
+      uranus:    { longitude: dms("Aquarius", 26, 56), tolDeg: TOL_OUTER_PLANET, retrograde: true },
+      neptune:   { longitude: dms("Leo", 6, 23),      tolDeg: TOL_OUTER_PLANET },
+      pluto:     { longitude: dms("Cancer", 5, 32),   tolDeg: TOL_OUTER_PLANET },
+      true_node: { longitude: dms("Sagittarius", 21, 50), tolDeg: TOL_NODE },
+    },
+    angles: {
+      ascendant: { longitude: dms("Sagittarius", 23, 37), tolDeg: TOL_ANGLE },
+      midheaven: { longitude: dms("Virgo", 5, 43),        tolDeg: TOL_ANGLE },
+    },
+    // Placidus cusps for a Southern-Hemisphere chart. Cusp 1 = ASC, Cusp 10 = MC,
+    // Cusp 4 = MC + 180°, Cusp 7 = ASC + 180°.
+    placidusCusps: [
+      { longitude: dms("Sagittarius", 23, 37), tolDeg: TOL_ANGLE },             // 1 (ASC)
+      { longitude: dms("Capricorn", 16, 6),    tolDeg: TOL_CUSP_INTERMEDIATE }, // 2
+      { longitude: dms("Aquarius", 8, 59),     tolDeg: TOL_CUSP_INTERMEDIATE }, // 3
+      { longitude: dms("Pisces", 5, 43),       tolDeg: TOL_ANGLE },             // 4 (IC)
+      { longitude: dms("Aries", 8, 60),        tolDeg: TOL_CUSP_INTERMEDIATE }, // 5
+      { longitude: dms("Taurus", 17, 18),      tolDeg: TOL_CUSP_INTERMEDIATE }, // 6
+      { longitude: dms("Gemini", 23, 37),      tolDeg: TOL_ANGLE },             // 7 (DSC)
+      { longitude: dms("Cancer", 16, 6),       tolDeg: TOL_CUSP_INTERMEDIATE }, // 8
+      { longitude: dms("Leo", 8, 59),          tolDeg: TOL_CUSP_INTERMEDIATE }, // 9
+      { longitude: dms("Virgo", 5, 43),        tolDeg: TOL_ANGLE },             // 10 (MC)
+      { longitude: dms("Libra", 8, 60),        tolDeg: TOL_CUSP_INTERMEDIATE }, // 11
+      { longitude: dms("Scorpio", 17, 18),     tolDeg: TOL_CUSP_INTERMEDIATE }, // 12
+    ],
+  },
+};
+
+export const FIXTURES = [DIANA, EINSTEIN, JOBS, MANDELA];

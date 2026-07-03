@@ -182,7 +182,7 @@ function extractWindows(
   const inOrb = (lon: number) =>
     Math.abs(angularDifference(lon, natalLongitude) - targetAngle) <= orbLimit;
 
-  const separationSigned = (lon: number, speed: number) => {
+  const separationSigned = (lon: number) => {
     // Signed offset: how far past exact aspect the planet is, in [-180, 180],
     // consistent across samples so we can look for sign changes (exact passes).
     // Rotate longitude so exact aspect corresponds to natalLongitude + targetAngle.
@@ -239,9 +239,9 @@ function extractWindows(
   const events: RawEventWindow[] = [];
   for (const w of merged) {
     const peaks: number[] = [];
-    let prevSep = separationSigned(samples[w.startIdx].lon, samples[w.startIdx].speed);
+    let prevSep = separationSigned(samples[w.startIdx].lon);
     for (let i = w.startIdx + 1; i <= w.endIdx; i++) {
-      const cur = separationSigned(samples[i].lon, samples[i].speed);
+      const cur = separationSigned(samples[i].lon);
       if ((prevSep <= 0 && cur > 0) || (prevSep >= 0 && cur < 0) || cur === 0) {
         // Sign change → exact aspect between samples[i-1] and samples[i]. Refine.
         const exactJd = refineExactAspect(

@@ -132,6 +132,18 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           responses: { "200": { description: "Full natal-style chart cast at the moment the transit Sun returns to the natal Sun longitude" } },
         },
       },
+      "/api/v1/astrology/planetary-return": {
+        post: {
+          summary: "Cast a Planetary Return chart (Sun, Mercury, Venus, Mars, Jupiter, Saturn)",
+          description:
+            "Finds the first moment on or after `after_datetime` when the given planet's ecliptic longitude equals its natal longitude, then casts a full natal-style chart for that moment. A minimum interval from birth is enforced so post-birth retrograde loops back over the natal longitude don't count as a return.",
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { $ref: "#/components/schemas/PlanetaryReturnInput" } } },
+          },
+          responses: { "200": { description: "Full natal-style chart cast at the return moment, with the planet, natal longitude, and return JD-UT" } },
+        },
+      },
       "/api/v1/astrocartography": {
         post: {
           summary: "Compute astrocartography (planetary lines on Earth)",
@@ -275,6 +287,38 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             relocation: {
               type: "object",
               description: "Optional: cast the return chart for a different location (where you will be during the year).",
+              required: ["latitude", "longitude", "timezone"],
+              properties: {
+                latitude: { type: "number", minimum: -90, maximum: 90 },
+                longitude: { type: "number", minimum: -180, maximum: 180 },
+                timezone: { type: "string" },
+              },
+            },
+          },
+        },
+        PlanetaryReturnInput: {
+          type: "object",
+          required: ["natal", "planet"],
+          properties: {
+            natal: { $ref: "#/components/schemas/NatalInput" },
+            planet: {
+              type: "string",
+              enum: ["sun", "mercury", "venus", "mars", "jupiter", "saturn"],
+              example: "saturn",
+            },
+            after_datetime: {
+              type: "string",
+              example: "2026-01-01T00:00:00",
+              description: "Find the first return on or after this ISO datetime. Defaults to now.",
+            },
+            after_timezone: {
+              type: "string",
+              example: "UTC",
+              description: "IANA timezone for after_datetime. Defaults to UTC.",
+            },
+            relocation: {
+              type: "object",
+              description: "Optional: cast the return chart at a different location.",
               required: ["latitude", "longitude", "timezone"],
               properties: {
                 latitude: { type: "number", minimum: -90, maximum: 90 },

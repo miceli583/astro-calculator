@@ -79,22 +79,6 @@ export function BirthFormFields({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    const q = placeQuery.trim();
-    if (q.length < 3) {
-      setGeoOptions([]);
-      setGeoError(null);
-      return;
-    }
-    if (q === lastQueryRef.current) return;
-    const handle = setTimeout(() => {
-      lastQueryRef.current = q;
-      void runGeocode(q);
-    }, 300);
-    return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeQuery]);
-
   async function runGeocode(q: string) {
     setGeoError(null);
     setGeoLoading(true);
@@ -119,6 +103,25 @@ export function BirthFormFields({
       if (lastQueryRef.current === q) setGeoLoading(false);
     }
   }
+
+  function handlePlaceQueryChange(next: string) {
+    setPlaceQuery(next);
+    if (next.trim().length < 3) {
+      setGeoOptions([]);
+      setGeoError(null);
+    }
+  }
+
+  useEffect(() => {
+    const q = placeQuery.trim();
+    if (q.length < 3) return;
+    if (q === lastQueryRef.current) return;
+    const handle = setTimeout(() => {
+      lastQueryRef.current = q;
+      void runGeocode(q);
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [placeQuery]);
 
   function applyGeocoded(g: GeocodeResult) {
     onChange({
@@ -154,7 +157,7 @@ export function BirthFormFields({
           <input
             type="text"
             value={placeQuery}
-            onChange={(e) => setPlaceQuery(e.target.value)}
+            onChange={(e) => handlePlaceQueryChange(e.target.value)}
             onFocus={() => { if (geoOptions.length > 0) setGeoOpen(true); }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -165,6 +168,7 @@ export function BirthFormFields({
               }
             }}
             placeholder='Start typing — e.g. "New Orleans" or "Berlin"'
+            role="combobox"
             aria-autocomplete="list"
             aria-controls={listboxId}
             aria-expanded={geoOpen && geoOptions.length > 0}

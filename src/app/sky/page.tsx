@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { SkyEvent } from "@/lib/calculators/sky-events";
 
 interface SkyEventsResponse {
@@ -33,13 +33,13 @@ async function fetchSky(body: unknown): Promise<SkyEventsResponse> {
 export default function SkyPage() {
   const [years, setYears] = useState<number>(1);
   const [enabled, setEnabled] = useState<Set<Category>>(new Set(ALL_CATEGORIES));
+  const [planetFilter, setPlanetFilter] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<SkyEventsResponse | null>(null);
 
   useEffect(() => {
     void load(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function load(y: number) {
@@ -54,6 +54,7 @@ export default function SkyPage() {
         end_date: fmtISODate(end),
       });
       setData(result);
+      setPlanetFilter(new Set());
     } catch (e) {
       setError((e as Error).message);
       setData(null);
@@ -62,10 +63,26 @@ export default function SkyPage() {
     }
   }
 
-  const filteredEvents = data?.events.filter((e) => {
-    const c = categoryOf(e.type);
-    return c ? enabled.has(c) : false;
-  }) ?? [];
+  // Planets that appear in the loaded events (retrogrades + ingresses have a
+  // `body`; lunations and eclipses do not, so they always pass this filter).
+  const availablePlanets = useMemo(() => {
+    if (!data) return [];
+    const seen = new Set<string>();
+    for (const e of data.events) if (e.body) seen.add(e.body);
+    const order = ["mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune", "pluto"];
+    return order.filter((p) => seen.has(p));
+  }, [data]);
+
+  const filteredEvents = useMemo(() => {
+    if (!data) return [];
+    return data.events.filter((e) => {
+      const c = categoryOf(e.type);
+      if (!c || !enabled.has(c)) return false;
+      // Planet filter only applies to events with a body; empty set means "all".
+      if (e.body && planetFilter.size > 0 && !planetFilter.has(e.body)) return false;
+      return true;
+    });
+  }, [data, enabled, planetFilter]);
 
   return (
     <main style={{ maxWidth: 1080, margin: "0 auto", padding: "3rem 1.5rem 6rem" }}>
@@ -73,7 +90,7 @@ export default function SkyPage() {
         <div style={{ color: "var(--muted)", fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase" }}>
           Sky Weather · Live
         </div>
-        <h1 style={{ fontSize: "2.2rem", margin: "0.5rem 0 0.6rem", letterSpacing: "-0.02em" }}>What's coming up</h1>
+        <h1 style={{ fontSize: "2.2rem", margin: "0.5rem 0 0.6rem", letterSpacing: "-0.02em" }}>What&apos;s coming up</h1>
         <p style={{ color: "var(--muted)", margin: 0 }}>
           Retrograde stations, moon phases, sign ingresses, and eclipses — no birth chart required.
         </p>
@@ -82,6 +99,8 @@ export default function SkyPage() {
       <Controls
         years={years}
         enabled={enabled}
+        availablePlanets={availablePlanets}
+        planetFilter={planetFilter}
         onYearsChange={(y) => {
           setYears(y);
           void load(y);
@@ -91,6 +110,12 @@ export default function SkyPage() {
           if (next.has(cat)) next.delete(cat);
           else next.add(cat);
           setEnabled(next);
+        }}
+        onTogglePlanet={(p) => {
+          const next = new Set(planetFilter);
+          if (next.has(p)) next.delete(p);
+          else next.add(p);
+          setPlanetFilter(next);
         }}
         rangeMeta={data?.scannedDateRange ?? null}
         eventCount={filteredEvents.length}
@@ -127,16 +152,22 @@ export default function SkyPage() {
 function Controls({
   years,
   enabled,
+  availablePlanets,
+  planetFilter,
   onYearsChange,
   onToggleCategory,
+  onTogglePlanet,
   rangeMeta,
   eventCount,
   loading,
 }: {
   years: number;
   enabled: Set<Category>;
+  availablePlanets: string[];
+  planetFilter: Set<string>;
   onYearsChange: (y: number) => void;
   onToggleCategory: (c: Category) => void;
+  onTogglePlanet: (p: string) => void;
   rangeMeta: { start: string; end: string } | null;
   eventCount: number;
   loading: boolean;
@@ -208,6 +239,59 @@ function Controls({
           })}
         </div>
       </div>
+
+      {availablePlanets.length > 0 && (
+        <div
+          style={{
+            marginTop: "1rem",
+            paddingTop: "1rem",
+            borderTop: "1px solid var(--border)",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "0.4rem",
+            alignItems: "center",
+          }}
+        >
+          <span style={{
+            color: "var(--muted)",
+            fontSize: 11,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            marginRight: "0.25rem",
+            minWidth: 54,
+          }}>
+            Planet
+          </span>
+          {availablePlanets.map((p) => {
+            const on = planetFilter.has(p);
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => onTogglePlanet(p)}
+                aria-pressed={on}
+                style={{
+                  background: on ? "var(--accent)" : "transparent",
+                  color: on ? "var(--bg)" : "var(--muted)",
+                  border: on ? "1px solid var(--accent)" : "1px solid var(--border)",
+                  padding: "0.25rem 0.6rem",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  letterSpacing: "0.02em",
+                  lineHeight: 1.4,
+                }}
+              >
+                {capitalize(p)}
+              </button>
+            );
+          })}
+          <span style={{ color: "var(--muted)", fontSize: 11, marginLeft: "0.5rem" }}>
+            Applies to retrogrades &amp; ingresses only.
+          </span>
+        </div>
+      )}
 
       {rangeMeta && !loading && (
         <div

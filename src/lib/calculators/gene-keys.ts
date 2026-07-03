@@ -15,6 +15,10 @@ import {
   type PlanetName,
 } from "../ephemeris/client";
 import { longitudeToGate, type GateActivation } from "../constants/hd-gates";
+import {
+  HD_DESIGN_ARC_DEG,
+  HD_DESIGN_ARC_APPROX_DAYS,
+} from "../constants/design-arc";
 import type { BirthData } from "../types/birth-data";
 
 const GK_PLANETS: readonly PlanetName[] = [
@@ -39,8 +43,8 @@ function chartActivations(jd: number): ChartActivations {
 }
 
 function designJd(birthJd: number, birthSunLong: number): number {
-  const target = (birthSunLong - 88 + 360) % 360;
-  let jd = birthJd - 88 / 0.9856;
+  const target = (birthSunLong - HD_DESIGN_ARC_DEG + 360) % 360;
+  let jd = birthJd - HD_DESIGN_ARC_APPROX_DAYS;
   for (let i = 0; i < 12; i++) {
     const sun = calcPlanet(jd, "sun");
     let diff = sun.longitude - target;

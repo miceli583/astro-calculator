@@ -499,6 +499,180 @@ export function calculateSolarReturn(input: SolarReturnInput): SolarReturnChart 
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Planetary Returns (Mercury, Venus, Mars, Jupiter, Saturn, …)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Planets for which a return chart is astrologically meaningful. */
+export type ReturnPlanet =
+  | "sun"
+  | "mercury"
+  | "venus"
+  | "mars"
+  | "jupiter"
+  | "saturn";
+
+/** Mean apparent daily motion (deg/day) — used to pick a coarse scan step. */
+const RETURN_MEAN_MOTION: Record<ReturnPlanet, number> = {
+  sun: 0.9856,
+  mercury: 4.09,
+  venus: 1.60,
+  mars: 0.524,
+  jupiter: 0.083,
+  saturn: 0.034,
+};
+
+/**
+ * Minimum days from birth before a crossing counts as a "return". Set to ~80%
+ * of each planet's mean sidereal period so that near-birth retrograde-loop
+ * crossings (which finish in the same direction as natal, but before any
+ * meaningful orbital cycle) are filtered out.
+ */
+const RETURN_MIN_DAYS_FROM_BIRTH: Record<ReturnPlanet, number> = {
+  sun: 300,      // ~82% of 365d
+  mercury: 70,   // ~80% of 88d
+  venus: 180,    // ~80% of 225d
+  mars: 550,     // ~80% of 687d
+  jupiter: 3466, // ~80% of 4333d (11.86y)
+  saturn: 8607,  // ~80% of 10759d (29.46y)
+};
+
+export interface PlanetaryReturnInput {
+  natal: BirthData & { house_system?: HouseSystem };
+  planet: ReturnPlanet;
+  /** Find the first return on or after this ISO datetime. Defaults to now (UTC). */
+  after_datetime?: string;
+  /** Timezone for after_datetime. Defaults to UTC. */
+  after_timezone?: string;
+  /** Optional relocation. Falls back to natal lat/lon/timezone. */
+  relocation?: { latitude: number; longitude: number; timezone: string };
+}
+
+export interface PlanetaryReturnChart extends NatalChart {
+  planet: ReturnPlanet;
+  /** Natal longitude of `planet` that the return matches. */
+  natal_planet_longitude: number;
+  /** UT instant when the transiting planet longitude equals the natal longitude. */
+  return_jd_ut: number;
+  /** True if the return chart was cast at a relocated lat/lon. */
+  relocated: boolean;
+}
+
+/**
+ * Find the first moment after `after_datetime` when the given planet's ecliptic
+ * longitude matches its natal longitude, and cast a full chart for that moment.
+ *
+ * A minimum interval from birth is enforced to filter out the planet's own
+ * post-birth retrograde loop back over the natal longitude — Saturn, for
+ * instance, retrogrades over its natal longitude within months of birth, but
+ * the astrological "return" is when it has completed a full orbital cycle.
+ */
+export function calculatePlanetaryReturn(input: PlanetaryReturnInput): PlanetaryReturnChart {
+  const natalJd = julianDayUT(input.natal.datetime, input.natal.timezone);
+  const natalLon = calcPlanet(natalJd, input.planet).longitude;
+
+  const afterIso = input.after_datetime ?? new Date().toISOString().slice(0, 19);
+  const afterTz = input.after_timezone ?? "UTC";
+  const afterJd = julianDayUT(afterIso, afterTz);
+
+  const meanMotion = RETURN_MEAN_MOTION[input.planet];
+  // Step size targets ~0.5° of motion per sample. Small enough that even
+  // retrograde crossings won't skip the natal longitude.
+  const step = 0.5 / meanMotion;
+
+  // Signed angular difference in (-180, 180].
+  const sep = (lon: number) => {
+    let d = ((lon - natalLon + 540) % 360) - 180;
+    if (d === -180) d = 180;
+    return d;
+  };
+
+  let prevJd = afterJd;
+  let prevSep = sep(calcPlanet(prevJd, input.planet).longitude);
+
+  // Cap the scan at 100 years — well beyond any expected return cadence.
+  const maxJd = afterJd + 365.25 * 100;
+
+  let returnJd = NaN;
+  while (prevJd < maxJd) {
+    const curJd = Math.min(prevJd + step, maxJd);
+    const curSep = sep(calcPlanet(curJd, input.planet).longitude);
+    // A true return crossing has both prevSep and curSep close to zero. The
+    // sign-flip test alone also fires when the planet crosses the *opposition*
+    // (natalLon + 180°) because sep wraps between +180 and -180 there — reject
+    // those by requiring both endpoint magnitudes to be small.
+    const signFlip =
+      (prevSep < 0 && curSep >= 0) ||
+      (prevSep > 0 && curSep <= 0) ||
+      curSep === 0;
+    const bothNearZero = Math.abs(prevSep) < 90 && Math.abs(curSep) < 90;
+    const crossed = signFlip && bothNearZero;
+    if (crossed) {
+      // Bisect for the exact crossing between prevJd and curJd.
+      let lo = prevJd;
+      let hi = curJd;
+      for (let j = 0; j < 40; j++) {
+        const mid = (lo + hi) / 2;
+        const midSep = sep(calcPlanet(mid, input.planet).longitude);
+        if (Math.abs(midSep) < 1e-9) {
+          lo = hi = mid;
+          break;
+        }
+        const sameSideAsLo =
+          (prevSep < 0 && midSep < 0) ||
+          (prevSep > 0 && midSep > 0);
+        if (sameSideAsLo) lo = mid;
+        else hi = mid;
+      }
+      const candidate = (lo + hi) / 2;
+      // Filter crossings that happen before the planet has completed a
+      // meaningful fraction of its orbit. Otherwise Saturn's own post-birth
+      // retrograde loop (which finishes direct ~5 months after birth) would
+      // spuriously register as its return.
+      const enoughTimeElapsed =
+        candidate - natalJd >= RETURN_MIN_DAYS_FROM_BIRTH[input.planet];
+      if (enoughTimeElapsed) {
+        returnJd = candidate;
+        break;
+      }
+      // Otherwise advance past the crossing and keep scanning.
+    }
+    prevJd = curJd;
+    prevSep = curSep;
+  }
+
+  if (!Number.isFinite(returnJd)) {
+    throw new Error(
+      `No ${input.planet} return found within 100 years of ${afterIso}. This should not happen for supported planets.`,
+    );
+  }
+
+  const lat = input.relocation?.latitude ?? input.natal.latitude;
+  const lon = input.relocation?.longitude ?? input.natal.longitude;
+  const tz = input.relocation?.timezone ?? input.natal.timezone;
+
+  const isoUtc = jdUtToIsoUtc(returnJd);
+  const chart = calculateNatalChart({
+    datetime: isoUtc,
+    timezone: "UTC",
+    latitude: lat,
+    longitude: lon,
+    house_system: input.natal.house_system,
+  });
+
+  return {
+    ...chart,
+    planet: input.planet,
+    natal_planet_longitude: natalLon,
+    return_jd_ut: returnJd,
+    relocated:
+      input.relocation !== undefined &&
+      (lat !== input.natal.latitude ||
+        lon !== input.natal.longitude ||
+        tz !== input.natal.timezone),
+  };
+}
+
 /** Convert a Julian Day (UT) to an ISO 8601 UTC datetime string. */
 function jdUtToIsoUtc(jd: number): string {
   // Standard JD-to-Gregorian (Meeus, Astronomical Algorithms ch. 7).

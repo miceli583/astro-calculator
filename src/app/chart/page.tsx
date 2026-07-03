@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import Link from "next/link";
 import type {
   Aspect,
   NatalChart,
@@ -23,14 +24,7 @@ import type { TransitEvent, TransitEventsResult } from "@/lib/calculators/transi
 import type { SynastryResult } from "@/lib/calculators/synastry";
 import { BirthFormFields, type BirthForm as SharedBirthForm } from "../_birth-form";
 
-interface BirthForm {
-  name: string;
-  date: string;
-  time: string;
-  timezone: string;
-  latitude: string;
-  longitude: string;
-}
+type BirthForm = SharedBirthForm;
 
 interface ChartResults {
   natal: NatalChart;
@@ -54,14 +48,6 @@ const SAMPLE: BirthForm = {
   latitude: "48.4011",
   longitude: "9.9876",
 };
-
-const COMMON_TIMEZONES = [
-  "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
-  "America/Phoenix", "America/Anchorage", "Pacific/Honolulu",
-  "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Rome", "Europe/Athens",
-  "Asia/Tokyo", "Asia/Shanghai", "Asia/Kolkata", "Asia/Dubai",
-  "Australia/Sydney", "Pacific/Auckland", "UTC",
-];
 
 async function callApi<T>(path: string, body: unknown): Promise<T> {
   const r = await fetch(path, {
@@ -89,98 +75,11 @@ async function callApi<T>(path: string, body: unknown): Promise<T> {
   return j.data as T;
 }
 
-interface GeocodeResult {
-  display_name: string;
-  latitude: number;
-  longitude: number;
-  timezone: string;
-}
-
 export default function ChartPage() {
   const [form, setForm] = useState<BirthForm>(SAMPLE);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ChartResults | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const [placeQuery, setPlaceQuery] = useState("");
-  const [geoLoading, setGeoLoading] = useState(false);
-  const [geoOptions, setGeoOptions] = useState<GeocodeResult[]>([]);
-  const [geoError, setGeoError] = useState<string | null>(null);
-  const [geoOpen, setGeoOpen] = useState(false);
-  const lastQueryRef = useRef<string>("");
-  const cityFieldRef = useRef<HTMLDivElement>(null);
-
-  // Click outside the city combobox closes the dropdown.
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (!cityFieldRef.current) return;
-      if (!cityFieldRef.current.contains(e.target as Node)) setGeoOpen(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const update = (k: keyof BirthForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  // Debounced autocomplete: fire 300ms after the user stops typing, when the
-  // query is at least 3 characters and hasn't already been resolved.
-  useEffect(() => {
-    const q = placeQuery.trim();
-    if (q.length < 3) {
-      setGeoOptions([]);
-      setGeoError(null);
-      return;
-    }
-    if (q === lastQueryRef.current) return;
-    const handle = setTimeout(() => {
-      lastQueryRef.current = q;
-      runGeocode(q);
-    }, 300);
-    return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeQuery]);
-
-  async function runGeocode(q: string) {
-    setGeoError(null);
-    setGeoLoading(true);
-    try {
-      const r = await fetch("/api/v1/geocode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q, limit: 6 }),
-      });
-      const j = await r.json();
-      // Stale-response guard: if the user kept typing while this request was
-      // in flight, drop the result on the floor.
-      if (lastQueryRef.current !== q) return;
-      if (!r.ok || j.error) throw new Error(j.error?.message ?? "Geocoder error");
-      const results = (j.data?.results ?? []) as GeocodeResult[];
-      setGeoOptions(results);
-      setGeoOpen(true);
-      if (results.length === 0) setGeoError("No matches. Try a different spelling.");
-    } catch (err) {
-      if (lastQueryRef.current === q) {
-        setGeoError(err instanceof Error ? err.message : String(err));
-      }
-    } finally {
-      if (lastQueryRef.current === q) setGeoLoading(false);
-    }
-  }
-
-  function applyGeocoded(g: GeocodeResult) {
-    setForm((f) => ({
-      ...f,
-      latitude: g.latitude.toFixed(4),
-      longitude: g.longitude.toFixed(4),
-      timezone: g.timezone,
-    }));
-    setPlaceQuery(g.display_name);
-    lastQueryRef.current = g.display_name;
-    setGeoOptions([]);
-    setGeoOpen(false);
-    setGeoError(null);
-  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -228,7 +127,7 @@ export default function ChartPage() {
         <h1 style={{ fontSize: "2.2rem", margin: "0.5rem 0 0.6rem", letterSpacing: "-0.02em" }}>Generate a chart</h1>
         <p style={{ color: "var(--muted)", margin: 0 }}>
           Astrology, astrocartography, Human Design, Gene Keys, Life Path, Destiny Cards — all in one go.{" "}
-          <a href="/">See API docs</a>
+          <Link href="/">See API docs</Link>
         </p>
       </header>
 
@@ -238,113 +137,7 @@ export default function ChartPage() {
       </div>
 
       <form onSubmit={handleSubmit} aria-busy={loading} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, padding: "1.5rem", marginBottom: "2rem" }}>
-        <div className="stack-on-mobile" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem 1.25rem" }}>
-          <Field label="Name (optional)" full>
-            <input type="text" value={form.name} onChange={update("name")} placeholder="e.g. Matthew Miceli" />
-          </Field>
-          <Field label="Birth date">
-            <input type="date" value={form.date} onChange={update("date")} required />
-          </Field>
-          <Field label="Birth time (24h)">
-            <input type="time" value={form.time} onChange={update("time")} required />
-          </Field>
-          <Field label="Birthplace (city) — auto-fills lat/lon + timezone as you type" full>
-            <div ref={cityFieldRef} style={{ position: "relative" }}>
-              <input
-                type="text"
-                value={placeQuery}
-                onChange={(e) => setPlaceQuery(e.target.value)}
-                onFocus={() => { if (geoOptions.length > 0) setGeoOpen(true); }}
-                onKeyDown={(e) => {
-                  // Don't let Enter submit the outer form while user is typing in
-                  // the city search; instead, pick the first result if open.
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    if (geoOpen && geoOptions.length > 0) applyGeocoded(geoOptions[0]);
-                  } else if (e.key === "Escape") {
-                    setGeoOpen(false);
-                  }
-                }}
-                placeholder='Start typing — e.g. "New Orleans" or "Berlin"'
-                aria-autocomplete="list"
-                aria-controls="geo-listbox"
-                aria-expanded={geoOpen && geoOptions.length > 0}
-              />
-              {geoLoading && (
-                <div aria-hidden="true" style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "var(--muted)" }}>
-                  searching…
-                </div>
-              )}
-              {geoOpen && geoOptions.length > 0 && (
-                <div
-                  id="geo-listbox"
-                  role="listbox"
-                  style={{
-                    position: "absolute",
-                    top: "calc(100% + 4px)",
-                    left: 0,
-                    right: 0,
-                    zIndex: 20,
-                    background: "var(--code-bg)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 7,
-                    overflow: "hidden",
-                    maxHeight: 280,
-                    overflowY: "auto",
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-                  }}
-                >
-                  {geoOptions.map((g, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      role="option"
-                      aria-selected={false}
-                      onClick={() => applyGeocoded(g)}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        textAlign: "left",
-                        background: "transparent",
-                        border: 0,
-                        color: "var(--fg)",
-                        padding: "0.6rem 0.75rem",
-                        borderTop: i === 0 ? "0" : "1px solid var(--border)",
-                        cursor: "pointer",
-                        fontSize: 13,
-                        fontFamily: "inherit",
-                      }}
-                    >
-                      {g.display_name}
-                      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2, fontFamily: "ui-monospace, monospace" }}>
-                        {g.latitude.toFixed(4)}, {g.longitude.toFixed(4)} · {g.timezone}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            {geoError && (
-              <div role="alert" style={{ color: "#ff6b6b", fontSize: 12, marginTop: 6 }}>{geoError}</div>
-            )}
-          </Field>
-          <Field label="Timezone (IANA)" full>
-            <select value={form.timezone} onChange={update("timezone")} required>
-              {COMMON_TIMEZONES.includes(form.timezone) ? null : (
-                <option value={form.timezone}>{form.timezone} (from city)</option>
-              )}
-              {COMMON_TIMEZONES.map((tz) => (
-                <option key={tz} value={tz}>{tz}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Latitude (°N positive)">
-            <input type="number" step="0.0001" min={-90} max={90} value={form.latitude} onChange={update("latitude")} required />
-          </Field>
-          <Field label="Longitude (°E positive)">
-            <input type="number" step="0.0001" min={-180} max={180} value={form.longitude} onChange={update("longitude")} required />
-          </Field>
-        </div>
+        <BirthFormFields value={form} onChange={setForm} idPrefix="chart-a" />
         <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
           <button type="submit" disabled={loading} style={{
             background: "var(--accent)", color: "#1a1535", border: 0, borderRadius: 8,
@@ -368,19 +161,6 @@ export default function ChartPage() {
       {results && <ResultsView form={form} r={results} />}
     </main>
   );
-}
-
-function Field({ label, children, full }: { label: string; children: ReactNode; full?: boolean }) {
-  return (
-    <label style={{ display: "block", gridColumn: full ? "1 / -1" : undefined }}>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6, letterSpacing: "0.05em", textTransform: "uppercase" }}>{label}</div>
-      <FieldInputWrap>{children}</FieldInputWrap>
-    </label>
-  );
-}
-
-function FieldInputWrap({ children }: { children: ReactNode }) {
-  return <div className="birth-input">{children}</div>;
 }
 
 // ─── Results ────────────────────────────────────────────────────────────────
@@ -461,6 +241,9 @@ function TransitsTab({ form }: { form: BirthForm }) {
   const [error, setError] = useState<string | null>(null);
   const [events, setEvents] = useState<TransitEvent[] | null>(null);
   const [rangeMeta, setRangeMeta] = useState<{ start: string; end: string } | null>(null);
+  const [planetFilter, setPlanetFilter] = useState<Set<string>>(new Set());
+  const [aspectFilter, setAspectFilter] = useState<Set<string>>(new Set());
+  const [retroOnly, setRetroOnly] = useState(false);
 
   async function generate() {
     setLoading(true);
@@ -484,6 +267,10 @@ function TransitsTab({ form }: { form: BirthForm }) {
       const result = await callApi<TransitEventsResult>("/api/v1/transit/events", body);
       setEvents(result.events);
       setRangeMeta({ start: startStr, end: endStr });
+      // Empty filter sets == "all shown"; a fresh scan resets user selections.
+      setPlanetFilter(new Set());
+      setAspectFilter(new Set());
+      setRetroOnly(false);
     } catch (e) {
       setError((e as Error).message);
       setEvents(null);
@@ -491,6 +278,38 @@ function TransitsTab({ form }: { form: BirthForm }) {
       setLoading(false);
     }
   }
+
+  const availablePlanets = useMemo(() => {
+    if (!events) return [];
+    const seen = new Set<string>();
+    for (const e of events) seen.add(e.transitPlanet);
+    return [...seen];
+  }, [events]);
+
+  const availableAspects = useMemo(() => {
+    if (!events) return [];
+    const seen = new Set<string>();
+    for (const e of events) seen.add(e.aspect);
+    const order = ["conjunction", "opposition", "square", "trine", "sextile", "quincunx"];
+    return order.filter((a) => seen.has(a));
+  }, [events]);
+
+  const filteredEvents = useMemo(() => {
+    if (!events) return null;
+    return events.filter((e) => {
+      if (planetFilter.size > 0 && !planetFilter.has(e.transitPlanet)) return false;
+      if (aspectFilter.size > 0 && !aspectFilter.has(e.aspect)) return false;
+      if (retroOnly && !e.isRetrogradeLoop) return false;
+      return true;
+    });
+  }, [events, planetFilter, aspectFilter, retroOnly]);
+
+  const toggle = <T,>(set: Set<T>, item: T, setter: (s: Set<T>) => void) => {
+    const next = new Set(set);
+    if (next.has(item)) next.delete(item);
+    else next.add(item);
+    setter(next);
+  };
 
   return (
     <Card title="Transits" accent="⚹">
@@ -562,9 +381,177 @@ function TransitsTab({ form }: { form: BirthForm }) {
           peaks.
         </div>
       )}
-      {events && <EventsList events={events} />}
+      {events && events.length > 0 && (
+        <TransitFilterBar
+          totalCount={events.length}
+          filteredCount={filteredEvents?.length ?? 0}
+          availablePlanets={availablePlanets}
+          availableAspects={availableAspects}
+          planetFilter={planetFilter}
+          aspectFilter={aspectFilter}
+          retroOnly={retroOnly}
+          onTogglePlanet={(p) => toggle(planetFilter, p, setPlanetFilter)}
+          onToggleAspect={(a) => toggle(aspectFilter, a, setAspectFilter)}
+          onToggleRetro={() => setRetroOnly((r) => !r)}
+          onClear={() => {
+            setPlanetFilter(new Set());
+            setAspectFilter(new Set());
+            setRetroOnly(false);
+          }}
+        />
+      )}
+      {filteredEvents && <EventsList events={filteredEvents} />}
     </Card>
   );
+}
+
+function TransitFilterBar({
+  totalCount,
+  filteredCount,
+  availablePlanets,
+  availableAspects,
+  planetFilter,
+  aspectFilter,
+  retroOnly,
+  onTogglePlanet,
+  onToggleAspect,
+  onToggleRetro,
+  onClear,
+}: {
+  totalCount: number;
+  filteredCount: number;
+  availablePlanets: string[];
+  availableAspects: string[];
+  planetFilter: Set<string>;
+  aspectFilter: Set<string>;
+  retroOnly: boolean;
+  onTogglePlanet: (p: string) => void;
+  onToggleAspect: (a: string) => void;
+  onToggleRetro: () => void;
+  onClear: () => void;
+}) {
+  const anyActive =
+    planetFilter.size > 0 || aspectFilter.size > 0 || retroOnly;
+  return (
+    <div
+      style={{
+        padding: "0.75rem 0 1rem",
+        borderBottom: "1px solid var(--border)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.6rem",
+      }}
+    >
+      <FilterChipRow
+        label="Planet"
+        items={availablePlanets}
+        selected={planetFilter}
+        onToggle={onTogglePlanet}
+        renderLabel={cap}
+      />
+      <FilterChipRow
+        label="Aspect"
+        items={availableAspects}
+        selected={aspectFilter}
+        onToggle={onToggleAspect}
+        renderLabel={(a) => `${aspSymbol(a)} ${a}`}
+      />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center", justifyContent: "space-between" }}>
+        <button
+          type="button"
+          onClick={onToggleRetro}
+          aria-pressed={retroOnly}
+          style={chipStyle(retroOnly)}
+        >
+          ℞ Retrograde loops only
+        </button>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+          <span style={{ color: "var(--muted)", fontSize: 12 }}>
+            {anyActive
+              ? `${filteredCount} of ${totalCount} events`
+              : `${totalCount} event${totalCount === 1 ? "" : "s"}`}
+          </span>
+          {anyActive && (
+            <button
+              type="button"
+              onClick={onClear}
+              style={{
+                background: "transparent",
+                border: "1px solid var(--border)",
+                color: "var(--muted)",
+                fontSize: 12,
+                padding: "0.25rem 0.6rem",
+                borderRadius: 4,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FilterChipRow<T extends string>({
+  label,
+  items,
+  selected,
+  onToggle,
+  renderLabel,
+}: {
+  label: string;
+  items: T[];
+  selected: Set<T>;
+  onToggle: (item: T) => void;
+  renderLabel: (item: T) => string;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", alignItems: "center" }}>
+      <span style={{
+        color: "var(--muted)",
+        fontSize: 11,
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        marginRight: "0.25rem",
+        minWidth: 54,
+      }}>
+        {label}
+      </span>
+      {items.map((item) => {
+        const on = selected.has(item);
+        return (
+          <button
+            key={item}
+            type="button"
+            onClick={() => onToggle(item)}
+            aria-pressed={on}
+            style={chipStyle(on)}
+          >
+            {renderLabel(item)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function chipStyle(active: boolean): React.CSSProperties {
+  return {
+    background: active ? "var(--accent)" : "transparent",
+    color: active ? "var(--bg)" : "var(--muted)",
+    border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
+    padding: "0.25rem 0.6rem",
+    borderRadius: 999,
+    fontSize: 12,
+    fontFamily: "inherit",
+    cursor: "pointer",
+    letterSpacing: "0.02em",
+    lineHeight: 1.4,
+  };
 }
 
 function EventsList({ events }: { events: TransitEvent[] }) {

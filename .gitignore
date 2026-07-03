@@ -43,3 +43,6 @@ ephemeris/*.txt
 # IDE
 .vscode/
 .idea/
+
+# local drafts (private, consumer-side prompts)
+soul-map-prompt.md

@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   calculateNatalChart,
+  calculatePlanetaryReturn,
   calculateProgressions,
   calculateSolarReturn,
 } from "@/lib/calculators/astrology";
-import { calcPlanet } from "@/lib/ephemeris/client";
+import { calcPlanet, julianDayUT } from "@/lib/ephemeris/client";
 import { DIANA } from "./fixtures/charts";
 
 describe("Part of Fortune", () => {
@@ -81,6 +82,121 @@ describe("Solar Return", () => {
       relocation: { latitude: 40, longitude: -74, timezone: "America/New_York" },
     });
     expect(sr.relocated).toBe(true);
+  });
+});
+
+describe("Planetary Returns", () => {
+  const natalJd = julianDayUT(DIANA.birth.datetime, DIANA.birth.timezone);
+
+  it("Sun return via calculatePlanetaryReturn matches calculateSolarReturn", () => {
+    // Solar return for 2000: seed on 2000-01-01 UTC and the next Sun return
+    // should be within ±1 day of Diana's 2000 birthday (July 1).
+    const pr = calculatePlanetaryReturn({
+      natal: DIANA.birth,
+      planet: "sun",
+      after_datetime: "2000-01-01T00:00:00",
+      after_timezone: "UTC",
+    });
+    const sr = calculateSolarReturn({ natal: DIANA.birth, year: 2000 });
+    expect(Math.abs(pr.return_jd_ut - sr.return_jd_ut)).toBeLessThan(1 / 86400); // <1 second
+    expect(pr.planet).toBe("sun");
+    expect(pr.natal_planet_longitude).toBeCloseTo(sr.natal_sun_longitude, 6);
+  });
+
+  it("at the return JD, the planet's longitude equals the natal longitude (<1 arcsec)", () => {
+    for (const planet of ["mercury", "venus", "mars", "jupiter", "saturn"] as const) {
+      const pr = calculatePlanetaryReturn({
+        natal: DIANA.birth,
+        planet,
+        after_datetime: "2000-01-01T00:00:00",
+        after_timezone: "UTC",
+      });
+      const returnLon = calcPlanet(pr.return_jd_ut, planet).longitude;
+      const diff = ((returnLon - pr.natal_planet_longitude + 540) % 360) - 180;
+      expect(Math.abs(diff)).toBeLessThan(1 / 3600);
+    }
+  });
+
+  it("Saturn return period is ~29-30 years", () => {
+    const pr = calculatePlanetaryReturn({
+      natal: DIANA.birth,
+      planet: "saturn",
+      after_datetime: DIANA.birth.datetime,
+      after_timezone: DIANA.birth.timezone,
+    });
+    const years = (pr.return_jd_ut - natalJd) / 365.25;
+    expect(years).toBeGreaterThan(29);
+    expect(years).toBeLessThan(30);
+  });
+
+  it("Jupiter return period is ~11-12 years", () => {
+    const pr = calculatePlanetaryReturn({
+      natal: DIANA.birth,
+      planet: "jupiter",
+      after_datetime: DIANA.birth.datetime,
+      after_timezone: DIANA.birth.timezone,
+    });
+    const years = (pr.return_jd_ut - natalJd) / 365.25;
+    expect(years).toBeGreaterThan(11);
+    expect(years).toBeLessThan(13);
+  });
+
+  it("Mars return period is under 3 years", () => {
+    const pr = calculatePlanetaryReturn({
+      natal: DIANA.birth,
+      planet: "mars",
+      after_datetime: DIANA.birth.datetime,
+      after_timezone: DIANA.birth.timezone,
+    });
+    const years = (pr.return_jd_ut - natalJd) / 365.25;
+    expect(years).toBeGreaterThan(0);
+    expect(years).toBeLessThan(3);
+  });
+
+  it("consecutive Venus returns are ~1 year apart on average", () => {
+    const first = calculatePlanetaryReturn({
+      natal: DIANA.birth,
+      planet: "venus",
+      after_datetime: "2000-01-01T00:00:00",
+      after_timezone: "UTC",
+    });
+    // Start the next scan a day after the first return to avoid re-finding it.
+    const secondSeedIso = new Date((first.return_jd_ut - 2451545.0) * 86400000 + Date.UTC(2000, 0, 1) + 86400000)
+      .toISOString().slice(0, 19);
+    const second = calculatePlanetaryReturn({
+      natal: DIANA.birth,
+      planet: "venus",
+      after_datetime: secondSeedIso,
+      after_timezone: "UTC",
+    });
+    const daysBetween = second.return_jd_ut - first.return_jd_ut;
+    // Venus geocentric returns aren't a fixed period; they cluster around
+    // 224-day multiples but with retrograde-loop complications. Loosely bound.
+    expect(daysBetween).toBeGreaterThan(60);
+    expect(daysBetween).toBeLessThan(600);
+  });
+
+  it("returned chart has houses, planets, and aspects", () => {
+    const pr = calculatePlanetaryReturn({
+      natal: DIANA.birth,
+      planet: "jupiter",
+      after_datetime: "2000-01-01T00:00:00",
+      after_timezone: "UTC",
+    });
+    expect(pr.planets.length).toBeGreaterThan(0);
+    expect(pr.houses.cusps.length).toBe(12);
+    expect(pr.aspects.length).toBeGreaterThan(0);
+  });
+
+  it("relocation flag flips when lat/lon differ from natal", () => {
+    const pr = calculatePlanetaryReturn({
+      natal: DIANA.birth,
+      planet: "saturn",
+      after_datetime: DIANA.birth.datetime,
+      after_timezone: DIANA.birth.timezone,
+      relocation: { latitude: 40, longitude: -74, timezone: "America/New_York" },
+    });
+    expect(pr.relocated).toBe(true);
   });
 });
 

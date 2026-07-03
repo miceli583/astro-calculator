@@ -20,6 +20,10 @@ import {
 import { longitudeToGate, type GateActivation } from "../constants/hd-gates";
 import { crossThemeName } from "../constants/hd-crosses";
 import {
+  HD_DESIGN_ARC_DEG,
+  HD_DESIGN_ARC_APPROX_DAYS,
+} from "../constants/design-arc";
+import {
   ALL_CENTERS,
   CHANNELS,
   MOTOR_CENTERS,
@@ -35,12 +39,12 @@ const HD_PLANETS: readonly PlanetName[] = [
   "saturn", "uranus", "neptune", "pluto", "true_node",
 ];
 
-// Find the JD when the Sun was exactly 88° earlier in longitude than birthSunLongitude.
-// We use Newton's method on Sun longitude (mean motion ≈ 0.9856°/day).
+// Find the JD when the Sun was exactly HD_DESIGN_ARC_DEG earlier in longitude
+// than birthSunLongitude. Newton's method on Sun longitude, seeded from the
+// mean-motion approximation.
 function designJulianDay(birthJd: number, birthSunLongitude: number): number {
-  const TARGET = (birthSunLongitude - 88 + 360) % 360;
-  // Initial guess: 88 mean solar days before birth
-  let jd = birthJd - 88 / 0.9856;
+  const TARGET = (birthSunLongitude - HD_DESIGN_ARC_DEG + 360) % 360;
+  let jd = birthJd - HD_DESIGN_ARC_APPROX_DAYS;
   for (let i = 0; i < 12; i++) {
     const sun = calcPlanet(jd, "sun");
     let diff = sun.longitude - TARGET;
@@ -398,7 +402,7 @@ function definitionType(
   }
 }
 
-export interface HumanDesignInput extends BirthData {}
+export type HumanDesignInput = BirthData;
 
 /**
  * Compute a Human Design body graph from birth data.

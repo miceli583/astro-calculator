@@ -8,7 +8,7 @@
 
 import { describe, it, expect } from "vitest";
 import { calculateNatalChart } from "@/lib/calculators/astrology";
-import { DIANA, JOBS } from "./fixtures/charts";
+import { DIANA, JOBS, MANDELA } from "./fixtures/charts";
 
 function angularDistance(a: number, b: number): number {
   return Math.abs(((a - b + 540) % 360) - 180);
@@ -106,6 +106,72 @@ describe("Steve Jobs — Placidus house cusps and angles vs Astrodienst", () => 
         );
       }
       expect(d).toBeLessThanOrEqual(exp.tolDeg);
+    });
+  }
+});
+
+describe("Nelson Mandela — Southern Hemisphere Placidus cusps + angles", () => {
+  // Only Southern-Hemisphere fixture in the suite. Ensures the Placidus
+  // implementation doesn't have a hidden sign-of-latitude assumption.
+  const chart = calculateNatalChart({ ...MANDELA.birth, house_system: "placidus" });
+
+  it(`Ascendant ≈ ${fmt(MANDELA.expected.angles.ascendant.longitude)}`, () => {
+    const exp = MANDELA.expected.angles.ascendant;
+    const d = angularDistance(chart.houses.ascendant.longitude, exp.longitude);
+    if (d > exp.tolDeg) {
+      throw new Error(
+        `ASC: got ${fmt(chart.houses.ascendant.longitude)} (${chart.houses.ascendant.longitude.toFixed(4)}°), ` +
+        `expected ${fmt(exp.longitude)}, offset ${(d * 60).toFixed(1)}'`
+      );
+    }
+    expect(d).toBeLessThanOrEqual(exp.tolDeg);
+  });
+
+  it(`Midheaven ≈ ${fmt(MANDELA.expected.angles.midheaven.longitude)}`, () => {
+    const exp = MANDELA.expected.angles.midheaven;
+    const d = angularDistance(chart.houses.midheaven.longitude, exp.longitude);
+    if (d > exp.tolDeg) {
+      throw new Error(
+        `MC: got ${fmt(chart.houses.midheaven.longitude)} (${chart.houses.midheaven.longitude.toFixed(4)}°), ` +
+        `expected ${fmt(exp.longitude)}, offset ${(d * 60).toFixed(1)}'`
+      );
+    }
+    expect(d).toBeLessThanOrEqual(exp.tolDeg);
+  });
+
+  for (let i = 0; i < 12; i++) {
+    const exp = MANDELA.expected.placidusCusps[i];
+    it(`Cusp ${i + 1} ≈ ${fmt(exp.longitude)}`, () => {
+      const cusp = chart.houses.cusps[i];
+      const d = angularDistance(cusp.longitude, exp.longitude);
+      if (d > exp.tolDeg) {
+        throw new Error(
+          `Cusp ${i + 1}: got ${fmt(cusp.longitude)} (${cusp.longitude.toFixed(4)}°), ` +
+          `expected ${fmt(exp.longitude)}, offset ${(d * 60).toFixed(1)}'`
+        );
+      }
+      expect(d).toBeLessThanOrEqual(exp.tolDeg);
+    });
+  }
+});
+
+describe("Nelson Mandela — planet positions", () => {
+  const chart = calculateNatalChart({ ...MANDELA.birth });
+  for (const [planetName, exp] of Object.entries(MANDELA.expected.planets)) {
+    it(`${planetName} ≈ ${fmt(exp.longitude)}`, () => {
+      const p = chart.planets.find((pl) => pl.name === planetName);
+      if (!p) throw new Error(`planet ${planetName} not returned`);
+      const d = angularDistance(p.longitude, exp.longitude);
+      if (d > exp.tolDeg) {
+        throw new Error(
+          `${planetName}: got ${fmt(p.longitude)} (${p.longitude.toFixed(4)}°), ` +
+          `expected ${fmt(exp.longitude)}, offset ${(d * 60).toFixed(1)}'`
+        );
+      }
+      expect(d).toBeLessThanOrEqual(exp.tolDeg);
+      if (exp.retrograde !== undefined) {
+        expect(p.retrograde).toBe(exp.retrograde);
+      }
     });
   }
 });
