@@ -7,7 +7,7 @@
 
 - Project scaffold: Next.js 16, TypeScript strict, AGPL-3.0
 - Swiss Ephemeris wrapper with auto-download of data files
-- **14 REST endpoints live** at `/api/v1/*` with Zod validation, including the new transit + synastry suite
+- **15 REST endpoints live** at `/api/v1/*` with Zod validation, including transit, synastry, and sky-weather suites
 - Calculators (all verified end-to-end against external references):
   - **Astrology** — natal positions, house cusps (7 systems), aspects, **Part of Fortune**, **South Node** (verified ±2' vs Astrodienst)
   - **Astrocartography** — MC/IC/AC/DC lines per planet, **parans (line-crossing points)** (verified via independent spherical-astronomy math)
@@ -19,9 +19,10 @@
   - **Secondary Progressions** — "day for a year" for inner planets
   - **Transits** — sky snapshot, transit-to-natal overlay, and multi-year event scanner with retrograde-loop detection
   - **Synastry** — chart-to-chart compatibility built on the shared `computeOverlay` core
+  - **Sky weather** — birth-chart-independent feed of retrograde stations, moon phases, sign ingresses, and eclipses (up to 20-year horizon)
 - **`/chart` UI page** — interactive form that fires all calculators and renders a full chart
 - Swagger UI at `/docs`, OpenAPI 3.1 spec at `/api/openapi.json`
-- **374/374 unit tests passing** including:
+- **382/382 unit tests passing** including:
   - 25 planet-position accuracy tests vs Astrodienst (Diana + Jobs)
   - 11 Sun-position cross-checks via independent Meeus VSOP (1879–2024)
   - 45 house-cusp tests across 7 systems

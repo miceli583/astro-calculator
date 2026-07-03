@@ -115,6 +115,16 @@ export const transitEventsInputSchema = z.object({
   step_days: z.number().int().min(1).max(30).optional(),
 });
 
+export const skyEventsInputSchema = z.object({
+  start_date: z.string().regex(ISO_DATE),
+  end_date: z.string().regex(ISO_DATE),
+  categories: z
+    .array(z.enum(["retrograde", "lunation", "ingress", "eclipse"]))
+    .optional(),
+  retrograde_planets: z.array(planetEnum).optional(),
+  ingress_planets: z.array(planetEnum).optional(),
+});
+
 export const synastryInputSchema = z.object({
   personA: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
   personB: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
@@ -156,6 +166,7 @@ export type AspectType = z.infer<typeof aspectTypeSchema>;
 export type TransitSkyInput = z.infer<typeof transitSkyInputSchema>;
 export type TransitToNatalInput = z.infer<typeof transitToNatalInputSchema>;
 export type TransitEventsInput = z.infer<typeof transitEventsInputSchema>;
+export type SkyEventsInput = z.infer<typeof skyEventsInputSchema>;
 export type SynastryInput = z.infer<typeof synastryInputSchema>;
 
 export type BirthDataInput = z.infer<typeof birthDataSchema>;

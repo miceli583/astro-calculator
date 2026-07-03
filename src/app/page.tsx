@@ -32,7 +32,7 @@ export default function Home() {
           Astrology, astrocartography, Human Design, Gene Keys, Life Path, and Destiny Cards.
           One HTTP API, Swiss Ephemeris precision, fully open source.
         </p>
-        <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.75rem" }}>
+        <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
           <a
             href="/chart"
             style={{
@@ -47,6 +47,21 @@ export default function Home() {
             }}
           >
             Generate a chart →
+          </a>
+          <a
+            href="/sky"
+            style={{
+              display: "inline-block",
+              background: "transparent",
+              color: "var(--accent)",
+              padding: "0.65rem 1.4rem",
+              borderRadius: 8,
+              fontWeight: 500,
+              border: "1px solid var(--accent)",
+              fontSize: 15,
+            }}
+          >
+            Sky weather ⚹
           </a>
         </div>
       </header>

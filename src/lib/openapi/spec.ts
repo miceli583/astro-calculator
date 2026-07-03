@@ -96,6 +96,12 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           responses: { "200": { description: "Theme entry (may be unpopulated if prose generation hasn't run yet)" } },
         },
       },
+      "/api/v1/sky/events": {
+        post: {
+          summary: "Sky weather feed — retrograde stations, lunations, sign ingresses, and eclipses",
+          responses: { "200": { description: "Chronologically sorted array of sky events across the requested date range (up to 20 years)" } },
+        },
+      },
       "/api/v1/synastry": {
         post: {
           summary: "Compatibility / connection chart between two people's natal charts",
