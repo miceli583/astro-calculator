@@ -11,6 +11,12 @@ interface SkyEventsResponse {
 const YEAR_OPTIONS = [1, 3, 5, 10, 20] as const;
 
 type Category = "retrograde" | "lunation" | "ingress" | "eclipse";
+const CATEGORY_LABELS: Record<Category, string> = {
+  retrograde: "Retrogrades",
+  lunation: "Moon phases",
+  ingress: "Ingresses",
+  eclipse: "Eclipses",
+};
 const ALL_CATEGORIES: readonly Category[] = ["retrograde", "lunation", "ingress", "eclipse"];
 
 async function fetchSky(body: unknown): Promise<SkyEventsResponse> {
@@ -31,13 +37,12 @@ export default function SkyPage() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<SkyEventsResponse | null>(null);
 
-  // Auto-load 1 year of everything on mount.
   useEffect(() => {
-    void load(1, new Set(ALL_CATEGORIES));
+    void load(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function load(y: number, cats: Set<Category>) {
+  async function load(y: number) {
     setLoading(true);
     setError(null);
     try {
@@ -47,7 +52,6 @@ export default function SkyPage() {
       const result = await fetchSky({
         start_date: fmtISODate(start),
         end_date: fmtISODate(end),
-        categories: [...cats],
       });
       setData(result);
     } catch (e) {
@@ -58,107 +62,59 @@ export default function SkyPage() {
     }
   }
 
-  const filteredEvents = data?.events.filter((e) => categoryOf(e.type) && enabled.has(categoryOf(e.type)!)) ?? [];
+  const filteredEvents = data?.events.filter((e) => {
+    const c = categoryOf(e.type);
+    return c ? enabled.has(c) : false;
+  }) ?? [];
 
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: "3rem 1.25rem", minHeight: "100vh" }}>
-      <div style={{ marginBottom: "2rem" }}>
+    <main style={{ maxWidth: 1080, margin: "0 auto", padding: "3rem 1.5rem 6rem" }}>
+      <header style={{ marginBottom: "2.5rem" }}>
         <div style={{ color: "var(--muted)", fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-          Sky Weather
+          Sky Weather · Live
         </div>
-        <h1 style={{ margin: "0.3rem 0 0.5rem", fontSize: "2.2rem", letterSpacing: "-0.02em" }}>What's coming up</h1>
-        <p style={{ color: "var(--muted)", margin: 0, maxWidth: 640 }}>
-          Retrograde stations, moon phases, sign ingresses, and eclipses — the collective sky, no birth chart needed.
+        <h1 style={{ fontSize: "2.2rem", margin: "0.5rem 0 0.6rem", letterSpacing: "-0.02em" }}>What's coming up</h1>
+        <p style={{ color: "var(--muted)", margin: 0 }}>
+          Retrograde stations, moon phases, sign ingresses, and eclipses — no birth chart required.
         </p>
-      </div>
+      </header>
 
-      <section
-        style={{
-          background: "var(--card)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          padding: "1.25rem",
-          marginBottom: "2rem",
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "1.25rem",
-          alignItems: "center",
+      <Controls
+        years={years}
+        enabled={enabled}
+        onYearsChange={(y) => {
+          setYears(y);
+          void load(y);
         }}
-      >
-        <label style={{ color: "var(--muted)", fontSize: 14 }}>
-          Horizon:{" "}
-          <select
-            value={years}
-            onChange={(e) => {
-              const y = parseInt(e.target.value, 10);
-              setYears(y);
-              void load(y, enabled);
-            }}
-            style={{
-              marginLeft: "0.5rem",
-              background: "var(--bg)",
-              color: "var(--fg)",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              padding: "0.4rem 0.6rem",
-              fontSize: 14,
-            }}
-          >
-            {YEAR_OPTIONS.map((y) => (
-              <option key={y} value={y}>
-                {y} year{y === 1 ? "" : "s"}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-          {ALL_CATEGORIES.map((cat) => {
-            const on = enabled.has(cat);
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => {
-                  const next = new Set(enabled);
-                  if (on) next.delete(cat);
-                  else next.add(cat);
-                  setEnabled(next);
-                }}
-                style={{
-                  background: on ? "var(--accent)" : "transparent",
-                  color: on ? "var(--bg)" : "var(--muted)",
-                  border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
-                  padding: "0.4rem 0.85rem",
-                  borderRadius: 20,
-                  fontSize: 13,
-                  fontWeight: on ? 500 : 400,
-                  cursor: "pointer",
-                  textTransform: "capitalize",
-                  transition: "all 0.15s",
-                }}
-              >
-                {cat}
-              </button>
-            );
-          })}
-        </div>
-
-        {data && !loading && (
-          <div style={{ color: "var(--muted)", fontSize: 13, marginLeft: "auto" }}>
-            {filteredEvents.length} event{filteredEvents.length === 1 ? "" : "s"} · {data.scannedDateRange.start} → {data.scannedDateRange.end}
-          </div>
-        )}
-      </section>
+        onToggleCategory={(cat) => {
+          const next = new Set(enabled);
+          if (next.has(cat)) next.delete(cat);
+          else next.add(cat);
+          setEnabled(next);
+        }}
+        rangeMeta={data?.scannedDateRange ?? null}
+        eventCount={filteredEvents.length}
+        loading={loading}
+      />
 
       {loading && (
-        <div style={{ padding: "3rem 0", textAlign: "center", color: "var(--muted)" }}>
+        <div style={{ padding: "3rem 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
           Computing sky events…
         </div>
       )}
 
       {error && (
-        <div style={{ padding: "1rem", background: "var(--card)", borderRadius: 6, color: "#ff8b8b", fontSize: 14 }}>
+        <div
+          style={{
+            padding: "1rem 1.25rem",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            color: "#ff8b8b",
+            fontSize: 14,
+            marginBottom: "1.5rem",
+          }}
+        >
           {error}
         </div>
       )}
@@ -168,43 +124,137 @@ export default function SkyPage() {
   );
 }
 
+function Controls({
+  years,
+  enabled,
+  onYearsChange,
+  onToggleCategory,
+  rangeMeta,
+  eventCount,
+  loading,
+}: {
+  years: number;
+  enabled: Set<Category>;
+  onYearsChange: (y: number) => void;
+  onToggleCategory: (c: Category) => void;
+  rangeMeta: { start: string; end: string } | null;
+  eventCount: number;
+  loading: boolean;
+}) {
+  return (
+    <section
+      style={{
+        background: "var(--card)",
+        border: "1px solid var(--border)",
+        borderRadius: 10,
+        padding: "1.5rem",
+        marginBottom: "2rem",
+      }}
+    >
+      <div className="stack-on-mobile" style={{ display: "flex", flexWrap: "wrap", gap: "1.5rem", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <span style={{ color: "var(--muted)", fontSize: 13, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            Horizon
+          </span>
+          <select
+            value={years}
+            onChange={(e) => onYearsChange(parseInt(e.target.value, 10))}
+            style={{
+              background: "var(--bg)",
+              color: "var(--fg)",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              padding: "0.5rem 0.75rem",
+              fontSize: 14,
+              fontFamily: "inherit",
+            }}
+          >
+            {YEAR_OPTIONS.map((y) => (
+              <option key={y} value={y}>
+                {y} year{y === 1 ? "" : "s"}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ height: 22, width: 1, background: "var(--border)" }} aria-hidden="true" />
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
+          {ALL_CATEGORIES.map((cat) => {
+            const on = enabled.has(cat);
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => onToggleCategory(cat)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  color: on ? "var(--fg)" : "var(--muted)",
+                  fontSize: 14,
+                  fontWeight: on ? 500 : 400,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  letterSpacing: "0.02em",
+                  borderBottom: on ? "1px solid var(--accent)" : "1px solid transparent",
+                  paddingBottom: 2,
+                  transition: "color 0.15s",
+                }}
+              >
+                {CATEGORY_LABELS[cat]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {rangeMeta && !loading && (
+        <div
+          style={{
+            marginTop: "1rem",
+            paddingTop: "1rem",
+            borderTop: "1px solid var(--border)",
+            color: "var(--muted)",
+            fontSize: 13,
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "1rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <span>{rangeMeta.start} → {rangeMeta.end}</span>
+          <span>{eventCount} event{eventCount === 1 ? "" : "s"}</span>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function EventsFeed({ events }: { events: SkyEvent[] }) {
   if (events.length === 0) {
     return (
-      <div style={{ padding: "3rem 0", textAlign: "center", color: "var(--muted)" }}>
+      <div style={{ padding: "3rem 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
         No events in the selected filters.
       </div>
     );
   }
-  // Group by year-month for a clean chronological feed.
   const byMonth = new Map<string, SkyEvent[]>();
   for (const ev of events) {
-    const key = ev.datetime.slice(0, 7); // YYYY-MM
+    const key = ev.datetime.slice(0, 7);
     if (!byMonth.has(key)) byMonth.set(key, []);
     byMonth.get(key)!.push(ev);
   }
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       {[...byMonth.entries()].map(([key, evs]) => (
-        <section key={key} style={{ marginBottom: "2rem" }}>
-          <h3
-            style={{
-              margin: "0 0 0.75rem",
-              fontSize: 14,
-              letterSpacing: "0.1em",
-              color: "var(--muted)",
-              fontWeight: 500,
-              textTransform: "uppercase",
-            }}
-          >
-            {formatMonth(key)}
-          </h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        <Card key={key} title={formatMonth(key)} accent={monthAccentGlyph(key)}>
+          <div>
             {evs.map((ev, i) => (
               <EventRow key={`${ev.datetime}-${ev.type}-${ev.body ?? "n"}-${i}`} ev={ev} />
             ))}
           </div>
-        </section>
+        </Card>
       ))}
     </div>
   );
@@ -214,50 +264,73 @@ function EventRow({ ev }: { ev: SkyEvent }) {
   const meta = eventMeta(ev);
   return (
     <div
+      className="sky-event-row"
       style={{
         display: "grid",
-        gridTemplateColumns: "auto 1fr auto",
-        gap: "0.75rem 1rem",
-        alignItems: "center",
-        padding: "0.85rem 1rem",
-        borderRadius: 8,
-        background: "var(--card)",
-        border: "1px solid var(--border)",
+        gridTemplateColumns: "80px 1fr auto",
+        gap: "1rem",
+        padding: "0.75rem 0",
+        borderBottom: "1px solid var(--border)",
+        alignItems: "baseline",
       }}
     >
-      <span
-        aria-hidden="true"
+      <div
         style={{
-          fontSize: 22,
-          color: meta.color,
-          width: 32,
-          height: 32,
-          display: "grid",
-          placeItems: "center",
-          borderRadius: 6,
-          background: "var(--bg)",
+          color: "var(--muted)",
+          fontSize: 12,
+          fontFamily: "ui-monospace, monospace",
+          letterSpacing: "0.03em",
+          whiteSpace: "nowrap",
         }}
       >
-        {meta.icon}
-      </span>
+        {formatDayTime(ev.datetime)}
+      </div>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 500 }}>{meta.title}</div>
+        <div style={{ fontSize: 14 }}>
+          <span aria-hidden="true" style={{ color: "var(--accent)", marginRight: "0.5rem" }}>
+            {meta.glyph}
+          </span>
+          {meta.title}
+        </div>
         {meta.subtitle && (
           <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{meta.subtitle}</div>
         )}
       </div>
       <div
         style={{
-          fontSize: 12,
           color: "var(--muted)",
-          fontFamily: "ui-monospace, monospace",
-          textAlign: "right",
+          fontSize: 12,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
           whiteSpace: "nowrap",
         }}
       >
-        {formatDateTime(ev.datetime)}
+        {meta.kind}
       </div>
     </div>
+  );
+}
+
+function Card({ title, accent, children }: { title: string; accent?: string; children: ReactNode }) {
+  return (
+    <section
+      style={{
+        background: "var(--card)",
+        border: "1px solid var(--border)",
+        borderRadius: 10,
+        padding: "1.5rem",
+      }}
+    >
+      <h3 style={{ margin: "0 0 1rem", fontSize: "1.1rem", letterSpacing: "-0.01em" }}>
+        {accent && (
+          <span aria-hidden="true" style={{ color: "var(--accent)", marginRight: "0.5rem" }}>
+            {accent}
+          </span>
+        )}
+        {title}
+      </h3>
+      {children}
+    </section>
   );
 }
 
@@ -281,54 +354,44 @@ function categoryOf(type: SkyEvent["type"]): Category | null {
   }
 }
 
-function eventMeta(ev: SkyEvent): { icon: ReactNode; color: string; title: string; subtitle: string | null } {
+function eventMeta(ev: SkyEvent): { glyph: string; kind: string; title: string; subtitle: string | null } {
   const body = ev.body ? capitalize(ev.body.replace(/_/g, " ")) : "";
   switch (ev.type) {
     case "retrograde_station":
-      return {
-        icon: "℞",
-        color: "#ff9ac1",
-        title: `${body} stations retrograde`,
-        subtitle: ev.sign ? `In ${ev.sign}` : null,
-      };
+      return { glyph: "℞", kind: "Retrograde", title: `${body} stations retrograde`, subtitle: ev.sign ? `In ${ev.sign}` : null };
     case "direct_station":
-      return {
-        icon: "→",
-        color: "#a1e8b0",
-        title: `${body} stations direct`,
-        subtitle: ev.sign ? `In ${ev.sign}` : null,
-      };
+      return { glyph: "→", kind: "Direct",     title: `${body} stations direct`,     subtitle: ev.sign ? `In ${ev.sign}` : null };
     case "new_moon":
-      return { icon: "●", color: "#7f7f8f", title: "New Moon", subtitle: ev.sign ? `In ${ev.sign}` : null };
+      return { glyph: "●", kind: "Lunation", title: "New Moon", subtitle: ev.sign ? `In ${ev.sign}` : null };
     case "first_quarter":
-      return { icon: "◐", color: "#c5b4ff", title: "First Quarter Moon", subtitle: ev.sign ? `In ${ev.sign}` : null };
+      return { glyph: "◐", kind: "Lunation", title: "First Quarter Moon", subtitle: ev.sign ? `In ${ev.sign}` : null };
     case "full_moon":
-      return { icon: "○", color: "#f5f0d9", title: "Full Moon", subtitle: ev.sign ? `In ${ev.sign}` : null };
+      return { glyph: "○", kind: "Lunation", title: "Full Moon", subtitle: ev.sign ? `In ${ev.sign}` : null };
     case "last_quarter":
-      return { icon: "◑", color: "#c5b4ff", title: "Last Quarter Moon", subtitle: ev.sign ? `In ${ev.sign}` : null };
+      return { glyph: "◑", kind: "Lunation", title: "Last Quarter Moon", subtitle: ev.sign ? `In ${ev.sign}` : null };
     case "sign_ingress":
       return {
-        icon: "⇨",
-        color: "#c5b4ff",
+        glyph: "⇨",
+        kind: "Ingress",
         title: `${body} enters ${ev.sign}`,
         subtitle: ev.fromSign ? `Leaves ${ev.fromSign}` : null,
       };
     case "solar_eclipse":
       return {
-        icon: "☀",
-        color: "#ffb37a",
+        glyph: "☉",
+        kind: "Eclipse",
         title: "Solar Eclipse",
         subtitle: `New Moon${ev.sign ? ` in ${ev.sign}` : ""} · ${ev.eclipseNodeDistance?.toFixed(1)}° from node`,
       };
     case "lunar_eclipse":
       return {
-        icon: "☾",
-        color: "#ffb37a",
+        glyph: "☾",
+        kind: "Eclipse",
         title: "Lunar Eclipse",
         subtitle: `Full Moon${ev.sign ? ` in ${ev.sign}` : ""} · ${ev.eclipseNodeDistance?.toFixed(1)}° from node`,
       };
     default:
-      return { icon: "•", color: "var(--muted)", title: ev.type, subtitle: null };
+      return { glyph: "•", kind: "Event", title: ev.type, subtitle: null };
   }
 }
 
@@ -346,13 +409,16 @@ function formatMonth(yyyyMm: string): string {
   return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-function formatDateTime(iso: string): string {
+/** A tiny accent glyph per month — cycles subtly through zodiac symbols. */
+function monthAccentGlyph(yyyyMm: string): string {
+  const m = parseInt(yyyyMm.split("-")[1] ?? "1", 10);
+  const glyphs = ["♑", "♒", "♓", "♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐"];
+  return glyphs[(m - 1 + 12) % 12];
+}
+
+function formatDayTime(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }) + " UTC";
+  const day = d.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
+  const time = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${day} · ${time}`;
 }
