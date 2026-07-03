@@ -53,6 +53,22 @@ a:hover { border-bottom-color: var(--accent); }
   .kv-stack-on-mobile > :first-child { flex: 0 0 auto !important; }
 }
 
+/* Shared input styling used by the birth-data forms on /chart and inside the
+   Synastry sub-tab. Kept in globals.css so any consumer of the .birth-input
+   wrapper class inherits the same look — no inline <style> blocks needed. */
+.birth-input input,
+.birth-input select {
+  width: 100%;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 0.7rem 0.7rem;
+  border-radius: 7px;
+  font-size: 16px;
+  font-family: inherit;
+  min-height: 44px;
+}
+
 code, pre {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.92em;

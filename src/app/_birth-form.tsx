@@ -39,11 +39,7 @@ export function Field({ label, children, full }: { label: string; children: Reac
 }
 
 export function FieldInputWrap({ children }: { children: ReactNode }) {
-  return (
-    <div className="field-wrap">
-      {children}
-    </div>
-  );
+  return <div className="birth-input">{children}</div>;
 }
 
 /**

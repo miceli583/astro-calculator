@@ -380,14 +380,7 @@ function Field({ label, children, full }: { label: string; children: ReactNode; 
 }
 
 function FieldInputWrap({ children }: { children: ReactNode }) {
-  return (
-    <div style={{ display: "block" }}>
-      <style>{`
-        .chart-form input, .chart-form select { width: 100%; background: var(--code-bg); border: 1px solid var(--border); color: var(--fg); padding: 0.7rem 0.7rem; border-radius: 7px; font-size: 16px; font-family: inherit; min-height: 44px; }
-      `}</style>
-      <div className="chart-form">{children}</div>
-    </div>
-  );
+  return <div className="birth-input">{children}</div>;
 }
 
 // ─── Results ────────────────────────────────────────────────────────────────
