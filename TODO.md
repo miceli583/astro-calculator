@@ -14,7 +14,6 @@
 
 ## Enhancements (nice to have)
 
-- [ ] Remove vestigial prose scaffolding (`src/lib/constants/transit-themes.json` placeholder and `GET /api/v1/transit/theme` route) — prose is out of scope for this API; consumers own their own theming layer.
 - [ ] Composite / Davison midpoint chart endpoint — deferred.
 - [ ] Client-side test coverage for new UI (Transits tab, Sky page, Synastry sub-tab, planet/aspect filter chips).
 - [ ] HD PHS sub-labels — MyBodyGraph shows Digestion labels like "Buzzing (Nervous Touch)" and directional labels like "Direct"/"InDirect". Map color+tone+base sub-classifications; needs lookup tables per variable.

@@ -90,12 +90,6 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           responses: { "200": { description: "Chronologically sorted array of events, each with orbEnter/orbLeave dates and exact-aspect peaks (multiple for retrograde loops)" } },
         },
       },
-      "/api/v1/transit/theme": {
-        get: {
-          summary: "Look up prose theme for a specific (transitPlanet, aspect, natalPoint, natalSign) key",
-          responses: { "200": { description: "Theme entry (may be unpopulated if prose generation hasn't run yet)" } },
-        },
-      },
       "/api/v1/sky/events": {
         post: {
           summary: "Sky weather feed — retrograde stations, lunations, sign ingresses, and eclipses",

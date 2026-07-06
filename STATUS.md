@@ -7,7 +7,7 @@
 
 - Project scaffold: Next.js 16, TypeScript strict, AGPL-3.0
 - Swiss Ephemeris wrapper with auto-download of data files
-- **16 REST endpoints live** at `/api/v1/*` with Zod validation, including transit, synastry, sky-weather, and planetary-return suites
+- **15 REST endpoints live** at `/api/v1/*` with Zod validation, including transit, synastry, sky-weather, and planetary-return suites
 - Calculators (all verified end-to-end against external references):
   - **Astrology** — natal positions, house cusps (7 systems), aspects, **Part of Fortune**, **South Node** (verified ±2' vs Astrodienst)
   - **Astrocartography** — MC/IC/AC/DC lines per planet, **parans (line-crossing points)** (verified via independent spherical-astronomy math)
