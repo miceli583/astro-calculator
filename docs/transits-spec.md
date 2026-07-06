@@ -3,6 +3,7 @@
 **Status:** Proposal, awaiting client decisions on §7 and §11.
 **Author:** AstroCalculator team
 **Scope:** Astrology transits, natal-vs-transit overlays, synastry (compatibility), event scanning, prose theming strategy.
+**Mirrored in:** `SoulMapCalculator/docs/upstream-transits-spec.md` — re-sync there when §4 (endpoints) or §5 (bodies/points) changes.
 
 ---
 
