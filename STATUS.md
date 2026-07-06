@@ -41,8 +41,7 @@
 ## Next
 
 - Vercel deploy + ephemeris bundle verification (blocker before public launch)
-- Populate `transit-themes.json` with prose — 4,536-entry manifest is generated; needs LLM pass (see docs/transits-spec.md §7)
-- Composite / Davison midpoint chart endpoint (spec Phase G, deferred)
+- Composite / Davison midpoint chart endpoint (deferred)
 - Cards of Destiny Planetary Ruling Card + Karma Cards (needs reference table)
 - Topocentric flag (Moon precision; concurrency design needed for sweph's global `set_topo`)
 - Sidereal zodiac with selectable ayanamsa
