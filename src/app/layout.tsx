@@ -17,7 +17,14 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Astro Calculator — Open API",
     description: "AGPL-licensed calculator service for esoteric blueprint systems.",
+    url: baseUrl,
+    siteName: "Astro Calculator",
     type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Astro Calculator — Open API",
+    description: "AGPL-licensed calculator service for esoteric blueprint systems.",
   },
   robots: { index: true, follow: true },
 };

@@ -1,13 +1,13 @@
 # Status
 
-**Last updated:** 2026-07-03
-**Last updated by:** Matthew Miceli
+**Last updated:** 2026-07-08
+**Last updated by:** Claude (framework-standard refactor)
 
 ## What works
 
 - Project scaffold: Next.js 16, TypeScript strict, AGPL-3.0
 - Swiss Ephemeris wrapper with auto-download of data files
-- **16 REST endpoints live** at `/api/v1/*` with Zod validation, including transit, synastry, sky-weather, and planetary-return suites
+- **15 REST endpoints live** at `/api/v1/*` with Zod validation, including transit, synastry, sky-weather, and planetary-return suites
 - Calculators (all verified end-to-end against external references):
   - **Astrology** — natal positions, house cusps (7 systems), aspects, **Part of Fortune**, **South Node** (verified ±2' vs Astrodienst)
   - **Astrocartography** — MC/IC/AC/DC lines per planet, **parans (line-crossing points)** (verified via independent spherical-astronomy math)
@@ -40,9 +40,8 @@
 
 ## Next
 
-- Vercel deploy + ephemeris bundle verification (blocker before public launch)
-- Populate `transit-themes.json` with prose — 4,536-entry manifest is generated; needs LLM pass (see docs/transits-spec.md §7)
-- Composite / Davison midpoint chart endpoint (spec Phase G, deferred)
+- ~~Vercel deploy + ephemeris bundle verification~~ — verified 2026-07-08, all endpoints return JSON in production
+- Composite / Davison midpoint chart endpoint (deferred)
 - Cards of Destiny Planetary Ruling Card + Karma Cards (needs reference table)
 - Topocentric flag (Moon precision; concurrency design needed for sweph's global `set_topo`)
 - Sidereal zodiac with selectable ayanamsa
@@ -51,12 +50,13 @@
 
 | Date       | Author          | Change                                                                                                                                           |
 | ---------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-07-08 | Claude          | Framework standard: dev branch + CI on dev, Sentry (client/server/edge + global-error), favicon set (icon.svg + apple-icon), OG image, sitemap/robots, twitter metadata; production JSON bug verified fixed (issue #1) |
+| 2026-07-06 | Matthew Miceli  | Public-repo hygiene pass: moved internal product-strategy docs to SoulMapCalculator; stripped transits-spec.md §7/§8/§10/§11 (cost tables, client-decision log, engineering rollout); removed vestigial `/transit/theme` route + `transit-themes.json` placeholder + calculator + test (endpoint count 16→15); typecheck clean, 412/412 tests pass |
 | 2026-07-03 | Matthew Miceli  | Tech-debt + polish sweep: ESLint flat config (drop deprecated `next lint`), extracted HD/GK design-arc constants, CHANGELOG + CI workflow, consolidated primary `/chart` form onto shared `BirthFormFields`, planet/aspect filter chips on Transits + Sky, `calculatePlanetaryReturn` (Sun/Mercury/Venus/Mars/Jupiter/Saturn) with new `/api/v1/astrology/planetary-return` endpoint, Nelson Mandela added as first Southern-Hemisphere reference fixture (33 new tests) |
 | 2026-07-03 | Matthew Miceli  | UI: site nav (Chart/Sky/API), Chart tab bar (Chart/Transits/Synastry), /sky feed page, Synastry sub-tab with Person B form + results; extracted shared BirthFormFields + `.birth-input` CSS class |
 | 2026-07-03 | Matthew Miceli  | Sky-weather calculator + `/api/v1/sky/events` — retrograde stations, moon phases, sign ingresses, eclipse detection (18.5°/12.25° node limits) |
-| 2026-07-03 | Matthew Miceli  | Transits/synastry suite: shared `computeOverlay` core, `/transit`, `/transit/natal`, `/transit/events` (retrograde loops), `/synastry`, `/transit/theme` scaffolding, 4,536-entry combinations manifest, spec doc |
+| 2026-07-03 | Matthew Miceli  | Transits/synastry suite: shared `computeOverlay` core, `/transit`, `/transit/natal`, `/transit/events` (retrograde loops), `/synastry`, 4,536-entry combinations manifest, spec doc |
 | 2026-07-03 | Matthew Miceli  | HD Variables fix (Environment/Perspective/Motivation sourcing), added Cognition/Signature/Not-Self, full 192-entry Incarnation Cross name lookup with structural invariant tests |
-| 2026-06-09 | Matthew Miceli  | Push to GitHub, city autocomplete with Nominatim + tz-lookup, geocoder endpoint, Einstein default sample, Vercel deploy fixes in progress                                                    |
 
 ## Known limitations
 

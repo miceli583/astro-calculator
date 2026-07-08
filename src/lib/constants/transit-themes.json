@@ -1,6 +1,0 @@
-{
-  "version": 1,
-  "generatedAt": null,
-  "note": "Prose stub. Populate `themes` with entries keyed by `{transitPlanet}.{aspect}.{natalPoint}.{natalSign}` once the theme-generation pass has run against transit-combinations.json. See docs/transits-spec.md §7.4.",
-  "themes": {}
-}
