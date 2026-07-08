@@ -1,7 +1,7 @@
 # Status
 
-**Last updated:** 2026-07-06
-**Last updated by:** Matthew Miceli
+**Last updated:** 2026-07-08
+**Last updated by:** Claude (framework-standard refactor)
 
 ## What works
 
@@ -40,7 +40,7 @@
 
 ## Next
 
-- Vercel deploy + ephemeris bundle verification (blocker before public launch)
+- ~~Vercel deploy + ephemeris bundle verification~~ — verified 2026-07-08, all endpoints return JSON in production
 - Composite / Davison midpoint chart endpoint (deferred)
 - Cards of Destiny Planetary Ruling Card + Karma Cards (needs reference table)
 - Topocentric flag (Moon precision; concurrency design needed for sweph's global `set_topo`)
@@ -50,6 +50,7 @@
 
 | Date       | Author          | Change                                                                                                                                           |
 | ---------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-07-08 | Claude          | Framework standard: dev branch + CI on dev, Sentry (client/server/edge + global-error), favicon set (icon.svg + apple-icon), OG image, sitemap/robots, twitter metadata; production JSON bug verified fixed (issue #1) |
 | 2026-07-06 | Matthew Miceli  | Public-repo hygiene pass: moved internal product-strategy docs to SoulMapCalculator; stripped transits-spec.md §7/§8/§10/§11 (cost tables, client-decision log, engineering rollout); removed vestigial `/transit/theme` route + `transit-themes.json` placeholder + calculator + test (endpoint count 16→15); typecheck clean, 412/412 tests pass |
 | 2026-07-03 | Matthew Miceli  | Tech-debt + polish sweep: ESLint flat config (drop deprecated `next lint`), extracted HD/GK design-arc constants, CHANGELOG + CI workflow, consolidated primary `/chart` form onto shared `BirthFormFields`, planet/aspect filter chips on Transits + Sky, `calculatePlanetaryReturn` (Sun/Mercury/Venus/Mars/Jupiter/Saturn) with new `/api/v1/astrology/planetary-return` endpoint, Nelson Mandela added as first Southern-Hemisphere reference fixture (33 new tests) |
 | 2026-07-03 | Matthew Miceli  | UI: site nav (Chart/Sky/API), Chart tab bar (Chart/Transits/Synastry), /sky feed page, Synastry sub-tab with Person B form + results; extracted shared BirthFormFields + `.birth-input` CSS class |

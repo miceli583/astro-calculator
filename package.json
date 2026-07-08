@@ -21,6 +21,7 @@
     "postinstall": "node scripts/download-ephemeris.mjs --quiet"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.64.0",
     "next": "^16.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
