@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#0a0a0c"/>
+  <!-- orbit ring -->
+  <ellipse cx="32" cy="32" rx="22" ry="9" fill="none" stroke="#c5b4ff" stroke-width="2.5" opacity="0.45" transform="rotate(-24 32 32)"/>
+  <!-- four-point star -->
+  <path d="M32 12 L35.6 28.4 L52 32 L35.6 35.6 L32 52 L28.4 35.6 L12 32 L28.4 28.4 Z" fill="#c5b4ff"/>
+  <!-- orbiting planet dot -->
+  <circle cx="49.5" cy="21.5" r="3.5" fill="#e9e8f0"/>
+</svg>

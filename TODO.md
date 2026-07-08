@@ -2,7 +2,7 @@
 
 ## Critical (blocks production)
 
-- [ ] Vercel: confirm calculator endpoints return JSON on production. Repo pushed to github.com/miceli583/astro-calculator and connected to Vercel. Endpoints currently return HTML. Check function logs in Vercel dashboard — if "Ephemeris data directory not found" appears, the new error message lists every path tried. If sweph fails to load, may need a Vercel-specific build hook to rebuild the native module.
+- [x] Vercel: confirm calculator endpoints return JSON on production — **verified 2026-07-08**: all 15 endpoints swept on astro-calculator-design.vercel.app; every one returns `application/json` (incl. sweph-powered natal/transits/HD). The `serverExternalPackages` + `outputFileTracingIncludes: "**/*"` fix in next.config.ts resolved it. Evidence in GitHub issue #1 (closed).
 
 ## Bugs (broken functionality)
 
