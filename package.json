@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@sentry/nextjs": "^10.64.0",
+    "@t3-oss/env-nextjs": "^0.11.1",
     "next": "^16.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
