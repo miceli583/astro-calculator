@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { env } from "@/env.js";
 import "./globals.css";
 import { SiteNav } from "./_nav";
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+const baseUrl = env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
 
 export const viewport: Viewport = {
   width: "device-width",
