@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { env } from "@/env.js";
 import { parseLocalISO, toUTC, type ParsedDateTime } from "./julian-day";
 
 const require = createRequire(import.meta.url);
@@ -27,7 +28,7 @@ let _ephePath: string | null = null;
 function findEphemerisPath(): string {
   if (_ephePath) return _ephePath;
 
-  const envPath = process.env.EPHEMERIS_PATH;
+  const envPath = env.EPHEMERIS_PATH;
   const thisFileDir = (() => {
     try { return dirname(fileURLToPath(import.meta.url)); }
     catch { return null; }
