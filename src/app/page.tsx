@@ -1,6 +1,7 @@
 const ENDPOINTS: { method: string; path: string; what: string }[] = [
   { method: "POST", path: "/api/v1/astrology/natal", what: "Natal chart — positions, houses, aspects" },
   { method: "POST", path: "/api/v1/astrology/transits", what: "Current transit aspects to natal" },
+  { method: "POST", path: "/api/v1/composite", what: "Composite (midpoint) chart from 2–10 people" },
   { method: "POST", path: "/api/v1/astrocartography", what: "MC/IC/AC/DC lines per planet" },
   { method: "POST", path: "/api/v1/human-design/chart", what: "Type, profile, channels, centers, authority" },
   { method: "POST", path: "/api/v1/gene-keys/profile", what: "Activation / Venus / Pearl Sequences" },

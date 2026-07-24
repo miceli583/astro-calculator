@@ -25,7 +25,7 @@ See `docs/LICENSING.md`.
 ## Architecture
 
 - Next.js 16 App Router on Node.js runtime (NOT Edge — `sweph` is a native module)
-- REST API: **15 calculator endpoints + a geocode helper** at `/api/v1/*`,
+- REST API: **16 calculator endpoints + a geocode helper** at `/api/v1/*`,
   no GraphQL/tRPC (consumers may not be TS)
 - Stateless: no DB, no auth (public calculator)
 - Validation: Zod. Errors: `{ error: { code, message, details? } }` via `lib/api/respond.ts`
@@ -44,9 +44,10 @@ See `docs/LICENSING.md`.
 ```
 src/
 ├── app/
-│   ├── api/v1/...           # 15 route handlers (astrology, astrocartography,
+│   ├── api/v1/...           # 16 route handlers (astrology, astrocartography,
 │   │                        #   human-design, gene-keys, life-path, destiny-card,
-│   │                        #   transit{,/natal,/events}, synastry, sky/events, geocode)
+│   │                        #   transit{,/natal,/events}, synastry, composite,
+│   │                        #   sky/events, geocode)
 │   ├── chart/page.tsx       # Interactive chart UI (tabs: Chart | Transits | Synastry)
 │   ├── sky/page.tsx         # Sky-weather feed page
 │   ├── _nav.tsx, _birth-form.tsx   # Shared nav + BirthFormFields
@@ -55,8 +56,10 @@ src/
 ├── lib/
 │   ├── ephemeris/           # sweph wrapper, julian day helpers
 │   ├── calculators/         # Pure functions, one file per system (incl.
-│   │                        #   overlay.ts shared by transit + synastry)
-│   ├── constants/           # Gate mappings, card mappings, planet IDs
+│   │                        #   overlay.ts shared by transit + synastry,
+│   │                        #   composite.ts midpoint charts)
+│   ├── constants/           # Gate mappings, card mappings, planet IDs,
+│   │                        #   transit-matrix.ts (canonical combo dimensions)
 │   ├── services/            # geocode, tz-lookup
 │   ├── validation/          # Zod schemas (input + output)
 │   ├── openapi/             # Spec generation
@@ -64,7 +67,7 @@ src/
 │   └── types/               # Shared types
 ephemeris/                   # Downloaded SE data files (gitignored, ~5MB)
 scripts/                     # Postinstall ephemeris downloader + transit combos generator
-tests/                       # 22 Vitest files, ~415 tests, reference fixtures in tests/fixtures/
+tests/                       # 24 Vitest files, ~450 tests, reference fixtures in tests/fixtures/
 docs/                        # ARCHITECTURE.md, LICENSING.md, transits-spec.md
 ```
 
@@ -88,7 +91,7 @@ EPHE_RANGE=full npm run ephe:download   # Extended historical range
 
 ## Testing
 
-- 22 test files under `tests/`, all passing (~415 tests)
+- 24 test files under `tests/`, all passing (~450 tests)
 - Accuracy anchored to external references: Astrodienst (Diana, Jobs), Nelson
   Mandela (Southern-Hemisphere fixture), independent Meeus VSOP Sun positions,
   genekeys.com, Robert Lee Camp's published Destiny Card spreads
@@ -110,3 +113,10 @@ EPHE_RANGE=full npm run ephe:download   # Extended historical range
   topocentric flag are deferred (see TODO.md).
 - **High-latitude warning** at ≥66.5° for quadrant house systems.
 - **HD/GK ignore lat/lon** — only the UT instant matters (documented in JSDoc).
+- **Composite = circular-mean midpoints, houses derived from composite MC**
+  (Astrodienst method) at the mean birth latitude; 2–10 charts. Davison deferred.
+- **Transit combination space is factored, not materialized** — canonical
+  dimensions in `lib/constants/transit-matrix.ts` (13 transit × 19 natal
+  points × 6 aspects); sign-keyed manifest generated to
+  `transit-combinations.json`; house/transit-side context annotated at runtime
+  on every aspect hit (`comboKey`).

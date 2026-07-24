@@ -1,7 +1,7 @@
 # Transits & Chart Comparison — Feature Specification
 
-**Status:** Implemented (v1).
-**Scope:** Astrology transits, natal-vs-transit overlays, synastry (compatibility), event scanning.
+**Status:** Implemented (v1; composite charts + full combination matrix added 2026-07-24).
+**Scope:** Astrology transits, natal-vs-transit overlays, synastry (compatibility), composite charts, event scanning.
 
 ---
 
@@ -13,7 +13,7 @@ Transits are the same core operation as compatibility (synastry) — both compar
 - Time-range transit events ("what themes are active for me this month/year/decade")
 - Synastry / compatibility ("how do I stack up against another person")
 
-A composite chart endpoint (a synthesized third chart from two people's midpoints) is scoped as a follow-up.
+A composite chart endpoint (a synthesized chart from 2–10 people's midpoints) is implemented at `POST /api/v1/composite` (see §4.5).
 
 ---
 
@@ -60,9 +60,9 @@ Orbs are configurable per request.
 | Pure sky snapshot | *(none)* | Sky at a datetime | `POST /api/v1/transit` |
 | Transit events | Natal | Sky, swept over a date range | `POST /api/v1/transit/events` |
 | Synastry | Person A natal | Person B natal | `POST /api/v1/synastry` |
-| Composite | *(midpoint of A + B)* | *(none — treated as a third chart)* | `POST /api/v1/composite` *(deferred)* |
+| Composite | *(midpoint of 2–10 charts)* | *(none — a standalone chart)* | `POST /api/v1/composite` |
 
-All five modes share one core function, `computeOverlay(chartA, chartB, options)`.
+The first four modes share one core function, `computeOverlay(chartA, chartB, options)`. Composite is a standalone natal-shaped chart (no overlay), built by `calculateComposite`.
 
 ---
 
@@ -180,19 +180,37 @@ Same shape as `transit/natal` but takes two natal births instead of natal + date
 
 Returns the same overlay structure. HD activations become "connection chart" data (whose gates co-activate whose, forming defined channels between the two people).
 
-### 4.5 `POST /api/v1/composite` *(deferred)*
+### 4.5 `POST /api/v1/composite`
 
-Computes the midpoint chart from two natal births and returns it as a standalone natal-shaped chart.
+Computes the midpoint chart from **2 up to 10** natal births and returns it as a standalone natal-shaped chart — the chart "of the relationship" (pair, family, team, or group).
+
+**Request**
+```json
+{
+  "charts": [
+    { "datetime": "...", "timezone": "...", "latitude": ..., "longitude": ... },
+    { "datetime": "...", "timezone": "...", "latitude": ..., "longitude": ... }
+  ],
+  "house_system": "placidus"
+}
+```
+
+**Method.**
+- Each composite planet is the **circular mean** of that planet's natal positions across all charts. For two charts this is exactly the classic shorter-arc composite midpoint; for larger groups it generalizes to the direction of the mean unit vector. Directionally degenerate midpoints (positions that cancel out) fall back deterministically to the arithmetic mean and are flagged per-planet plus surfaced in `warnings`.
+- The house wheel uses the standard **derived-from-composite-MC** method (as Astrodienst does): the composite MC (circular mean of the natal MCs) fixes the ARMC via the obliquity of the ecliptic, and cusps/angles follow from `houses_armc` at a reference latitude (the mean of the birth latitudes). This always yields a coherent, monotonic wheel — averaging cusps directly does not.
+- Part of Fortune is computed from composite ASC/Sun/Moon with the same day/night rule as natal charts; internal aspects between composite planets use natal-scale orbs. Composite points don't move, so there are no speeds or retrograde flags.
 
 ---
 
 ## 5. Scanned bodies and points
 
-**Transit planets (v1 default):** Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Chiron, Uranus, Neptune, Pluto, True Node. Meaningful "life theme" planets are Jupiter and slower (Saturn, Chiron, Uranus, Neptune, Pluto, Nodes). Fast planets (Sun, Moon, Mercury, Venus, Mars) generate short-duration transits — hours to days.
+The canonical dimension sets live in `src/lib/constants/transit-matrix.ts` and are derived from the app's planet models — unit tests assert every count below.
 
-**Natal points aspected:** Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto, Chiron, Nodes, Ascendant, Midheaven, IC, Descendant, Part of Fortune, Black Moon Lilith.
+**Transit points (13):** Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Chiron, Uranus, Neptune, Pluto, True Node, South Node (derived). Meaningful "life theme" planets are Jupiter and slower; fast planets generate short-duration transits — hours to days.
 
-Configurable per request; defaults ship with all of the above enabled.
+**Natal points aspected (19):** the 13 above plus Ascendant, Midheaven, IC, Descendant, Vertex, and Part of Fortune.
+
+Configurable per request; defaults ship with all of the above enabled (including the event scanner, whose slow-planet contacts to a chart's own outer points are exactly the classic life-stage markers — Saturn return, Uranus opposition, Chiron return, nodal returns).
 
 ---
 
@@ -207,9 +225,33 @@ For each `(transitPlanet, natalPoint, aspect)` combination:
 5. Within each window, use Newton's method on the longitude difference to find the exact moment(s) the aspect is perfected. Report these as the event's `peaks[]` array.
 6. Deduplicate and sort by `orbEnter` date.
 
-Complexity: O(range_in_days × transit_planet_count × natal_point_count). For a 10-year range with defaults, that's ~3,650 × 12 × 18 × 6 aspects ≈ 4.7M cheap sampling operations — well under 5 seconds server time.
+Complexity: O(range_in_days × transit_planet_count × natal_point_count). For a 10-year range with defaults, that's ~3,650 × 7 × 19 × 6 aspects ≈ 2.9M cheap sampling operations — well under 5 seconds server time (ephemeris sampling is per-planet and reused across points).
 
-To support keyed lookups, `scripts/generate-transit-combinations.mjs` emits a structured manifest of all `(transitPlanet, aspect, natalPoint, natalSign)` combinations (4,536 keys) at `src/lib/constants/transit-combinations.json`. Consumers use these keys to attach their own theming.
+## 6.5 Combination matrix & context factors
+
+The full combination space an integration can key against is:
+
+| Level | Formula | Count |
+|---|---|---|
+| Core pairing | transit point × aspect × natal point | 13 × 6 × 19 = **1,482** |
+| Sign-keyed (manifest) | core × natal sign | 1,482 × 12 = **17,784** |
+| Full context | core × natal sign × natal house × transit sign × transit house | 1,482 × 12⁴ = **30,730,752** |
+
+`src/lib/constants/transit-matrix.ts` is the canonical module: dimension sets, cardinality, enumeration, and the `buildComboKey` format. `scripts/generate-transit-combinations.mjs` materializes the sign-keyed level as `src/lib/constants/transit-combinations.json` (manifest v2: dimensions + key list + prose map); a unit test asserts the manifest and module never drift.
+
+Every aspect hit returned by `/transit/natal` and `/synastry` carries all context factors — `natalSign`, `natalHouse`, `transitSign`, `transitHouse`, `transitRetrograde` — plus a `comboKey` like `saturn.conjunction.sun.Aries.h10.Pisces.h3` whose first four segments are the legacy manifest key. House and transit-side factors are momentary, so the event scanner (whose windows span months and can cross ingresses) carries natal-side context only; house segments are omitted where no natal cusps exist.
+
+**Context ("tail") factors and where they come from** — these are deliberately sourced from existing calculators rather than duplicated into the matrix:
+
+| Factor | Source |
+|---|---|
+| Retrograde phase | `transitRetrograde` on each aspect hit (momentary); retrograde stations via `/sky/events`; full loop phases via `/transit/events` (`isRetrogradeLoop`, `peaks[]`) |
+| Life stage | Planet-to-own-point events from `/transit/events` (Saturn return, Uranus opposition, Chiron return, nodal returns — scanned by default) and the `/astrology/planetary-return` endpoint |
+| Sky-weather backdrop | `/sky/events` (stations, lunations, ingresses, eclipses) |
+| Aspect patterns (grand trine, T-square, …) | Not yet modeled — roadmap (see TODO.md) |
+| Chart-ruler role | Not yet modeled (needs a rulership table) — roadmap (see TODO.md) |
+
+To support keyed lookups, consumers use manifest keys (or runtime `comboKey` prefixes) to attach their own theming.
 
 ---
 
@@ -228,5 +270,5 @@ The event `id` combined with `natalSign` produces a stable lookup key (`saturn.c
 - **Fixed stars** — very niche, deferrable
 - **Draconic zodiac** — niche, deferrable
 - **Sidereal vs tropical** — currently tropical only. Sidereal is on the existing roadmap; when added, it applies to transits automatically
-- **Composite / Davison midpoint charts** — deferred
+- **Davison charts** (time/space-midpoint chart, distinct from the implemented midpoint composite) — deferred
 - **Astrocartography for transits** ("relocated transits") — deferrable

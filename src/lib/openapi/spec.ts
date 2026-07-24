@@ -106,6 +106,18 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           responses: { "200": { description: "Both natal charts plus bidirectional overlays (bOnA and aOnB)" } },
         },
       },
+      "/api/v1/composite": {
+        post: {
+          summary: "Composite (midpoint) chart from 2–10 birth charts",
+          description:
+            "Synthesizes one chart from several people's natal midpoints — the chart 'of the relationship'. Each composite planet is the circular mean of that planet's natal positions (for two charts, the classic shorter-arc midpoint). The house wheel is derived from the composite MC at the mean birth latitude.",
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { $ref: "#/components/schemas/CompositeInput" } } },
+          },
+          responses: { "200": { description: "Natal-style composite chart: midpoint planets with sign + house, derived house wheel, Part of Fortune, and internal aspects" } },
+        },
+      },
       "/api/v1/astrology/progressions": {
         post: {
           summary: "Compute secondary-progressed positions ('day for a year')",
@@ -319,6 +331,25 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
                 longitude: { type: "number", minimum: -180, maximum: 180 },
                 timezone: { type: "string" },
               },
+            },
+          },
+        },
+        CompositeInput: {
+          type: "object",
+          required: ["charts"],
+          properties: {
+            charts: {
+              type: "array",
+              minItems: 2,
+              maxItems: 10,
+              items: { $ref: "#/components/schemas/BirthData" },
+              description: "2–10 birth charts to combine into one composite chart",
+            },
+            house_system: {
+              type: "string",
+              enum: ["placidus", "koch", "porphyrius", "regiomontanus", "campanus", "equal", "whole_sign"],
+              default: "placidus",
+              description: "House system for the composite wheel",
             },
           },
         },

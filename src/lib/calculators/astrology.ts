@@ -12,7 +12,7 @@ import {
 } from "../ephemeris/client";
 import type { BirthData } from "../types/birth-data";
 
-const DEFAULT_PLANETS: readonly PlanetName[] = [
+export const DEFAULT_PLANETS: readonly PlanetName[] = [
   "sun",
   "moon",
   "mercury",
@@ -27,7 +27,7 @@ const DEFAULT_PLANETS: readonly PlanetName[] = [
   "chiron",
 ];
 
-const ZODIAC_SIGNS = [
+export const ZODIAC_SIGNS = [
   "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
   "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
 ];
@@ -131,7 +131,7 @@ function houseFor(longitude: number, cusps: number[]): number {
   return 1;
 }
 
-function computeAspects(planets: NatalPlanet[]): Aspect[] {
+export function computeAspects(planets: NatalPlanet[]): Aspect[] {
   const out: Aspect[] = [];
   for (let i = 0; i < planets.length; i++) {
     for (let j = i + 1; j < planets.length; j++) {

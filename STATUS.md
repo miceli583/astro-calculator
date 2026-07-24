@@ -1,13 +1,13 @@
 # Status
 
-**Last updated:** 2026-07-08
-**Last updated by:** Claude (framework-standard refactor)
+**Last updated:** 2026-07-24
+**Last updated by:** Claude PM (composite charts + full transit matrix)
 
 ## What works
 
 - Project scaffold: Next.js 16, TypeScript strict, AGPL-3.0
 - Swiss Ephemeris wrapper with auto-download of data files
-- **15 REST endpoints live** at `/api/v1/*` with Zod validation, including transit, synastry, sky-weather, and planetary-return suites
+- **16 REST endpoints live** at `/api/v1/*` with Zod validation, including transit, synastry, composite, sky-weather, and planetary-return suites
 - Calculators (all verified end-to-end against external references):
   - **Astrology** — natal positions, house cusps (7 systems), aspects, **Part of Fortune**, **South Node** (verified ±2' vs Astrodienst)
   - **Astrocartography** — MC/IC/AC/DC lines per planet, **parans (line-crossing points)** (verified via independent spherical-astronomy math)
@@ -20,10 +20,12 @@
   - **Secondary Progressions** — "day for a year" for inner planets
   - **Transits** — sky snapshot, transit-to-natal overlay, and multi-year event scanner with retrograde-loop detection
   - **Synastry** — chart-to-chart compatibility built on the shared `computeOverlay` core
+  - **Composite** — midpoint chart from 2–10 births (circular-mean planets, houses derived from composite MC, PoF, internal aspects)
+  - **Full transit combination matrix** — 13 transit × 19 natal points × 6 aspects with sign/house context on both sides; every aspect hit carries a stable `comboKey`; 17,784-key manifest (v2) + canonical `transit-matrix.ts` module
   - **Sky weather** — birth-chart-independent feed of retrograde stations, moon phases, sign ingresses, and eclipses (up to 20-year horizon)
 - **`/chart` UI page** — interactive form that fires all calculators and renders a full chart
 - Swagger UI at `/docs`, OpenAPI 3.1 spec at `/api/openapi.json`
-- **415/415 unit tests passing** including:
+- **449/449 unit tests passing** including:
   - 25 planet-position accuracy tests vs Astrodienst (Diana + Jobs) + 11 for Mandela (southern-hemisphere fixture)
   - 11 Sun-position cross-checks via independent Meeus VSOP (1879–2024)
   - 45 house-cusp tests across 7 systems + 14 Southern-Hemisphere Placidus cusp tests (Mandela)
@@ -32,6 +34,7 @@
   - 12 Gene Keys Hologenetic Profile structure tests
   - 18 Destiny Card anchors covering every month + verified Apr 8 = K♦
   - 12 progressions + solar/planetary-return tests
+  - 21 composite tests (circular-midpoint math incl. wraparound/degenerate/rotation-invariance, pair-midpoint equivalence, N-identical-chart identity, 10-chart group, wheel coherence) + 16 transit-matrix tests (full matrix sizes asserted at every level, six-aspect limit, manifest↔module consistency)
 - High-latitude warning for ≥66.5° lat with quadrant house systems
 
 ## In progress
@@ -41,7 +44,8 @@
 ## Next
 
 - ~~Vercel deploy + ephemeris bundle verification~~ — verified 2026-07-08, all endpoints return JSON in production
-- Composite / Davison midpoint chart endpoint (deferred)
+- ~~Composite midpoint chart endpoint~~ — shipped 2026-07-24 (2–10 charts); Davison variant still deferred
+- Aspect-pattern detection (grand trine, T-square, …) and chart-ruler derivation — the two context factors not yet modeled (see TODO.md)
 - Cards of Destiny Planetary Ruling Card + Karma Cards (needs reference table)
 - Topocentric flag (Moon precision; concurrency design needed for sweph's global `set_topo`)
 - Sidereal zodiac with selectable ayanamsa
@@ -50,6 +54,7 @@
 
 | Date       | Author          | Change                                                                                                                                           |
 | ---------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-07-24 | Claude PM       | Composite charts (`POST /api/v1/composite`, 2–10 births, circular-mean midpoints + MC-derived houses) and full transit combination matrix: canonical `transit-matrix.ts` (13×19×6 core, counts asserted in tests), context factors (`transitSign`/`transitHouse`/`transitRetrograde`/`comboKey`) on all overlay aspect hits, all 19 natal points exposed in transit/synastry/event-scanner, manifest v2 regenerated (17,784 keys, dimension-based format, 667KB vs 13.7MB naive), landing/OpenAPI/docs updated; 449 tests |
 | 2026-07-08 | Claude          | Framework standard: dev branch + CI on dev, Sentry (client/server/edge + global-error), favicon set (icon.svg + apple-icon), OG image, sitemap/robots, twitter metadata; production JSON bug verified fixed (issue #1) |
 | 2026-07-06 | Matthew Miceli  | Public-repo hygiene pass: moved internal product-strategy docs to SoulMapCalculator; stripped transits-spec.md §7/§8/§10/§11 (cost tables, client-decision log, engineering rollout); removed vestigial `/transit/theme` route + `transit-themes.json` placeholder + calculator + test (endpoint count 16→15); typecheck clean, 412/412 tests pass |
 | 2026-07-03 | Matthew Miceli  | Tech-debt + polish sweep: ESLint flat config (drop deprecated `next lint`), extracted HD/GK design-arc constants, CHANGELOG + CI workflow, consolidated primary `/chart` form onto shared `BirthFormFields`, planet/aspect filter chips on Transits + Sky, `calculatePlanetaryReturn` (Sun/Mercury/Venus/Mars/Jupiter/Saturn) with new `/api/v1/astrology/planetary-return` endpoint, Nelson Mandela added as first Southern-Hemisphere reference fixture (33 new tests) |
