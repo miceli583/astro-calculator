@@ -14,7 +14,9 @@
 
 ## Enhancements (nice to have)
 
-- [ ] Composite / Davison midpoint chart endpoint — deferred.
+- [ ] Davison chart endpoint (time/space-midpoint variant; midpoint composite shipped 2026-07-24).
+- [ ] Aspect-pattern detection (grand trine, T-square, yod, stellium) — needed as a transit-context factor; not yet modeled anywhere.
+- [ ] Chart-ruler derivation (ruler of the ASC sign; needs an agreed rulership table — traditional vs modern) — needed as a transit-context factor.
 - [ ] Client-side test coverage for new UI (Transits tab, Sky page, Synastry sub-tab, planet/aspect filter chips).
 - [ ] HD PHS sub-labels — MyBodyGraph shows Digestion labels like "Buzzing (Nervous Touch)" and directional labels like "Direct"/"InDirect". Map color+tone+base sub-classifications; needs lookup tables per variable.
 - [ ] Verify J (Juxtaposition) cross names against MyBodyGraph — RA and LA are structurally verified via quaternary invariants; J entries are single-source only.
