@@ -8,6 +8,7 @@
 import { calcAllPlanets, julianDayUT, type PlanetName } from "../ephemeris/client";
 import { calculateNatalChart, longitudeToSign, type NatalChart, type NatalInput, type SignPosition } from "./astrology";
 import {
+  buildNatalOverlayPoints,
   computeOverlay,
   type AspectType,
   type OverlayOptions,
@@ -129,17 +130,8 @@ export function calculateTransitToNatal(input: TransitToNatalInput): TransitToNa
     planets: input.transit_planets,
   });
 
-  const natalPoints = [
-    ...natalChart.planets.map((p) => ({
-      name: p.name as string,
-      longitude: p.longitude,
-      speed: p.speed,
-      retrograde: p.retrograde,
-    })),
-    // Angles as natal points — transits to the ASC/MC are major life events.
-    { name: "asc", longitude: natalChart.houses.ascendant.longitude, speed: 0 },
-    { name: "mc",  longitude: natalChart.houses.midheaven.longitude, speed: 0 },
-  ];
+  // Every modeled natal point — planets + South Node, four angles, Vertex, PoF.
+  const natalPoints = buildNatalOverlayPoints(natalChart);
   const overlay = computeOverlay(
     { points: natalPoints, cusps: natalChart.houses.cusps.map((c) => c.longitude) },
     {
