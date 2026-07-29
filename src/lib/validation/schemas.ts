@@ -50,8 +50,15 @@ export const planetEnum = z.enum([
   "vesta",
 ]);
 
-export const natalInputSchema = birthDataSchema.extend({
+export const rulershipConventionSchema = z.enum(["modern", "traditional"]);
+
+/** Birth data + the chart options honored wherever a natal-style chart is cast. */
+const natalChartOptionsSchema = birthDataSchema.extend({
   house_system: houseSystemSchema.optional(),
+  rulership: rulershipConventionSchema.optional(),
+});
+
+export const natalInputSchema = natalChartOptionsSchema.extend({
   planets: z.array(planetEnum).optional(),
 });
 
@@ -96,7 +103,7 @@ export const transitSkyInputSchema = z.object({
 });
 
 export const transitToNatalInputSchema = z.object({
-  natal: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
+  natal: natalChartOptionsSchema,
   transit_datetime: z.string().regex(ISO_DATETIME),
   transit_timezone: z.string().min(1),
   transit_planets: z.array(planetEnum).optional(),
@@ -126,8 +133,8 @@ export const skyEventsInputSchema = z.object({
 });
 
 export const synastryInputSchema = z.object({
-  personA: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
-  personB: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
+  personA: natalChartOptionsSchema,
+  personB: natalChartOptionsSchema,
   aspects: z.array(aspectTypeSchema).optional(),
   orbs: orbOverrideSchema.optional(),
 });
@@ -139,6 +146,10 @@ export const compositeInputSchema = z.object({
     .min(2, "A composite chart needs at least 2 charts")
     .max(10, "A composite chart supports at most 10 charts"),
   house_system: houseSystemSchema.optional(),
+  // Reference place for the composite house wheel (e.g. where the couple
+  // lives). Defaults to the arithmetic mean of the birth latitudes.
+  reference_latitude: z.number().min(-90).max(90).optional(),
+  rulership: rulershipConventionSchema.optional(),
 });
 
 export const geocodeInputSchema = z.object({
@@ -147,7 +158,7 @@ export const geocodeInputSchema = z.object({
 });
 
 export const solarReturnInputSchema = z.object({
-  natal: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
+  natal: natalChartOptionsSchema,
   year: z.number().int().min(1500).max(3500),
   relocation: z
     .object({
@@ -168,7 +179,7 @@ export const returnPlanetSchema = z.enum([
 ]);
 
 export const planetaryReturnInputSchema = z.object({
-  natal: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
+  natal: natalChartOptionsSchema,
   planet: returnPlanetSchema,
   after_datetime: z.string().regex(ISO_DATETIME).optional(),
   after_timezone: z.string().optional(),

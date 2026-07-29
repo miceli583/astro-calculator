@@ -241,3 +241,70 @@ describe("composite input schema (API boundary)", () => {
     ).toBe(false);
   });
 });
+
+describe("composite reference_latitude", () => {
+  const base = { charts: [DIANA.birth, JOBS.birth] };
+
+  it("defaults to the mean of the birth latitudes, flagged as such", () => {
+    const composite = calculateComposite(base);
+    const meanLat = (DIANA.birth.latitude + JOBS.birth.latitude) / 2;
+    expect(composite.referenceLatitude).toBeCloseTo(meanLat, 10);
+    expect(composite.referenceLatitudeSource).toBe("mean_birth_latitude");
+  });
+
+  it("honors an explicit reference_latitude and flags the source", () => {
+    const composite = calculateComposite({ ...base, reference_latitude: -33.87 }); // Sydney
+    expect(composite.referenceLatitude).toBe(-33.87);
+    expect(composite.referenceLatitudeSource).toBe("explicit");
+  });
+
+  it("only reshapes the house wheel: planets and MC unchanged, cusps move", () => {
+    const def = calculateComposite(base);
+    const relocated = calculateComposite({ ...base, reference_latitude: -33.87 });
+
+    for (let i = 0; i < def.planets.length; i++) {
+      expect(relocated.planets[i].name).toBe(def.planets[i].name);
+      expect(relocated.planets[i].longitude).toBeCloseTo(def.planets[i].longitude, 10);
+    }
+    // The MC is derived from the composite ARMC, which is latitude-independent.
+    expect(relocated.houses.midheaven.longitude).toBeCloseTo(def.houses.midheaven.longitude, 6);
+    // The ASC and intermediate cusps depend on latitude and must differ.
+    expect(relocated.houses.ascendant.longitude).not.toBeCloseTo(def.houses.ascendant.longitude, 1);
+  });
+
+  it("matches the default exactly when reference_latitude equals the mean", () => {
+    const meanLat = (DIANA.birth.latitude + JOBS.birth.latitude) / 2;
+    const def = calculateComposite(base);
+    const explicit = calculateComposite({ ...base, reference_latitude: meanLat });
+    expect(explicit.houses.ascendant.longitude).toBeCloseTo(def.houses.ascendant.longitude, 10);
+    expect(explicit.referenceLatitudeSource).toBe("explicit");
+  });
+
+  it("warns for polar reference latitudes with quadrant house systems", () => {
+    const composite = calculateComposite({ ...base, reference_latitude: 78 });
+    expect(composite.warnings.some((w) => w.includes("polar"))).toBe(true);
+  });
+
+  it("schema accepts in-range latitudes and rejects out-of-range", () => {
+    const birth = DIANA.birth;
+    expect(
+      compositeInputSchema.safeParse({ charts: [birth, birth], reference_latitude: 51.5 }).success
+    ).toBe(true);
+    expect(
+      compositeInputSchema.safeParse({ charts: [birth, birth], reference_latitude: 91 }).success
+    ).toBe(false);
+    expect(
+      compositeInputSchema.safeParse({ charts: [birth, birth], reference_latitude: -91 }).success
+    ).toBe(false);
+  });
+});
+
+describe("composite patterns", () => {
+  it("exposes aspect patterns computed from the composite points", () => {
+    const composite = calculateComposite({ charts: [DIANA.birth, EINSTEIN.birth] });
+    expect(Array.isArray(composite.patterns)).toBe(true);
+    for (const p of composite.patterns) {
+      expect(p.points).not.toContain("south_node");
+    }
+  });
+});

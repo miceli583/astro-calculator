@@ -15,6 +15,7 @@ import {
   type OverlayResult,
 } from "./overlay";
 import { longitudeToGate } from "../constants/hd-gates";
+import { detectAspectPatterns, type AspectPattern } from "./aspect-patterns";
 
 /** Default transit-planet set: outer + fast + Chiron + nodes. */
 export const DEFAULT_TRANSIT_PLANETS: readonly PlanetName[] = [
@@ -53,6 +54,12 @@ export interface TransitSkyPoint {
 export interface TransitSkyChart {
   jd_ut: number;
   planets: TransitSkyPoint[];
+  /**
+   * Aspect patterns in the transiting sky (sign-based only — a pure sky
+   * snapshot has no location, hence no houses). The derived South Node is
+   * excluded from detection.
+   */
+  patterns: AspectPattern[];
 }
 
 /**
@@ -98,7 +105,13 @@ export function calculateTransitSky(input: TransitSkyInput): TransitSkyChart {
     });
   }
 
-  return { jd_ut: jd, planets };
+  const patterns = detectAspectPatterns(
+    planets
+      .filter((p) => p.name !== "south_node")
+      .map((p) => ({ name: p.name, longitude: p.longitude }))
+  );
+
+  return { jd_ut: jd, planets, patterns };
 }
 
 export interface TransitToNatalInput {

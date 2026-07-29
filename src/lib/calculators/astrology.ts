@@ -11,6 +11,13 @@ import {
   type PlanetPosition,
 } from "../ephemeris/client";
 import type { BirthData } from "../types/birth-data";
+import { detectAspectPatterns, type AspectPattern, type PatternPoint } from "./aspect-patterns";
+import {
+  MODERN_RULERS,
+  TRADITIONAL_RULERS,
+  rulerOfSign,
+  type RulershipConvention,
+} from "../constants/rulerships";
 
 export const DEFAULT_PLANETS: readonly PlanetName[] = [
   "sun",
@@ -83,8 +90,85 @@ export interface NatalChart {
     isDayBirth: boolean;
   };
   aspects: Aspect[];
+  /** Chart-level aspect patterns (stellium, grand trine, T-square, yod, …). */
+  patterns: AspectPattern[];
+  /**
+   * The chart ruler — the planet ruling the Ascendant sign — with its
+   * placement and every chart aspect it participates in. Convention defaults
+   * to modern rulerships (Scorpio→Pluto, Aquarius→Uranus, Pisces→Neptune);
+   * pass `rulership: "traditional"` for the classical table.
+   */
+  chartRuler: ChartRuler;
   /** Non-fatal warnings about the chart (e.g., high-latitude house distortion). */
   warnings: string[];
+}
+
+export interface ChartRuler {
+  /** Which rulership table produced `ruler`. */
+  convention: RulershipConvention;
+  ascendantSign: string;
+  /** The ruling planet under `convention`. */
+  ruler: PlanetName;
+  /** Rulers under both conventions (differ only for Scorpio/Aquarius/Pisces). */
+  modernRuler: PlanetName;
+  traditionalRuler: PlanetName;
+  /**
+   * The ruler's placement in this chart, or null when the requested planet
+   * subset excludes the ruling planet.
+   */
+  placement: {
+    longitude: number;
+    sign: SignPosition;
+    house: number;
+    retrograde: boolean;
+    speed: number;
+  } | null;
+  /** Every chart aspect the ruling planet participates in. */
+  aspects: Aspect[];
+}
+
+/**
+ * Compute the chart-ruler role from an Ascendant sign and the chart's planets
+ * and aspect list. Shared by natal and composite charts.
+ */
+export function computeChartRuler(
+  ascendantSign: string,
+  planets: NatalPlanet[],
+  aspects: Aspect[],
+  convention: RulershipConvention = "modern",
+): ChartRuler {
+  const ruler = rulerOfSign(ascendantSign, convention);
+  const placed = planets.find((p) => p.name === ruler);
+  return {
+    convention,
+    ascendantSign,
+    ruler,
+    modernRuler: MODERN_RULERS[ascendantSign],
+    traditionalRuler: TRADITIONAL_RULERS[ascendantSign],
+    placement: placed
+      ? {
+          longitude: placed.longitude,
+          sign: placed.sign,
+          house: placed.house,
+          retrograde: placed.retrograde,
+          speed: placed.speed,
+        }
+      : null,
+    aspects: aspects.filter((a) => a.from === ruler || a.to === ruler),
+  };
+}
+
+/**
+ * Pattern-eligible points from a chart's planet list: every real body except
+ * the derived South Node (always exactly opposite the North Node — including
+ * both would fabricate opposition-based patterns out of one body).
+ */
+export function patternPointsFromPlanets(
+  planets: Pick<NatalPlanet, "name" | "longitude" | "house">[],
+): PatternPoint[] {
+  return planets
+    .filter((p) => p.name !== "south_node")
+    .map((p) => ({ name: p.name, longitude: p.longitude, house: p.house }));
 }
 
 /** Quadrant house systems (Placidus, Koch, Regiomontanus, Campanus) become
@@ -166,6 +250,8 @@ export function computeAspects(planets: NatalPlanet[]): Aspect[] {
 export interface NatalInput extends BirthData {
   house_system?: HouseSystem;
   planets?: PlanetName[];
+  /** Rulership convention for the chart ruler. Default "modern". */
+  rulership?: RulershipConvention;
 }
 
 /**
@@ -264,6 +350,9 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
     };
   }
 
+  const aspects = computeAspects(planets);
+  const ascendantSign = longitudeToSign(houses.ascendant).sign;
+
   return {
     jd_ut: jd,
     planets,
@@ -279,7 +368,9 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
       vertex: { longitude: houses.vertex, sign: longitudeToSign(houses.vertex) },
     },
     partOfFortune,
-    aspects: computeAspects(planets),
+    aspects,
+    patterns: detectAspectPatterns(patternPointsFromPlanets(planets)),
+    chartRuler: computeChartRuler(ascendantSign, planets, aspects, input.rulership),
     warnings,
   };
 }
@@ -424,7 +515,7 @@ export function calculateProgressions(input: ProgressedInput): ProgressedChart {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface SolarReturnInput {
-  natal: BirthData & { house_system?: HouseSystem };
+  natal: BirthData & { house_system?: HouseSystem; rulership?: RulershipConvention };
   /** Year of the return (e.g. 2026). */
   year: number;
   /**
@@ -488,6 +579,7 @@ export function calculateSolarReturn(input: SolarReturnInput): SolarReturnChart 
     latitude: lat,
     longitude: lon,
     house_system: input.natal.house_system,
+    rulership: input.natal.rulership,
   });
 
   return {
@@ -538,7 +630,7 @@ const RETURN_MIN_DAYS_FROM_BIRTH: Record<ReturnPlanet, number> = {
 };
 
 export interface PlanetaryReturnInput {
-  natal: BirthData & { house_system?: HouseSystem };
+  natal: BirthData & { house_system?: HouseSystem; rulership?: RulershipConvention };
   planet: ReturnPlanet;
   /** Find the first return on or after this ISO datetime. Defaults to now (UTC). */
   after_datetime?: string;
@@ -658,6 +750,7 @@ export function calculatePlanetaryReturn(input: PlanetaryReturnInput): Planetary
     latitude: lat,
     longitude: lon,
     house_system: input.natal.house_system,
+    rulership: input.natal.rulership,
   });
 
   return {
