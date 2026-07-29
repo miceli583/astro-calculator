@@ -114,7 +114,14 @@ EPHE_RANGE=full npm run ephe:download   # Extended historical range
 - **High-latitude warning** at ≥66.5° for quadrant house systems.
 - **HD/GK ignore lat/lon** — only the UT instant matters (documented in JSDoc).
 - **Composite = circular-mean midpoints, houses derived from composite MC**
-  (Astrodienst method) at the mean birth latitude; 2–10 charts. Davison deferred.
+  (Astrodienst method) at the mean birth latitude (or explicit
+  `reference_latitude`); 2–10 charts. Davison deferred.
+- **Aspect patterns** — stellium/grand trine/T-square/grand cross/yod/kite/
+  mystic rectangle on every natal-style chart + the sky snapshot; South Node
+  excluded; T-squares inside a grand cross suppressed (`aspect-patterns.ts`).
+- **Chart ruler = ruler of ASC sign, modern rulerships default** —
+  traditional table behind `rulership: "traditional"`; both rulers always
+  reported (`constants/rulerships.ts`).
 - **Transit combination space is factored, not materialized** — canonical
   dimensions in `lib/constants/transit-matrix.ts` (13 transit × 19 natal
   points × 6 aspects); sign-keyed manifest generated to

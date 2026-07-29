@@ -26,12 +26,17 @@ import type { BirthData } from "../types/birth-data";
 import {
   calculateNatalChart,
   computeAspects,
+  computeChartRuler,
   longitudeToSign,
+  patternPointsFromPlanets,
   type Aspect,
+  type ChartRuler,
   type NatalChart,
   type NatalPlanet,
   type SignPosition,
 } from "./astrology";
+import { detectAspectPatterns, type AspectPattern } from "./aspect-patterns";
+import type { RulershipConvention } from "../constants/rulerships";
 import { houseFor } from "./overlay";
 
 /** Max charts in one composite. */
@@ -42,6 +47,14 @@ export interface CompositeInput {
   charts: (BirthData & { house_system?: HouseSystem })[];
   /** House system for the composite wheel. Default placidus. */
   house_system?: HouseSystem;
+  /**
+   * Latitude to cast the composite house wheel for (e.g. where the couple
+   * lives, as Astro.com's reference-place option). Defaults to the
+   * arithmetic mean of the birth latitudes (Astrodienst method).
+   */
+  reference_latitude?: number;
+  /** Rulership convention for the composite chart ruler. Default "modern". */
+  rulership?: RulershipConvention;
 }
 
 export interface CompositePoint {
@@ -58,8 +71,10 @@ export interface CompositeChart {
   chartCount: number;
   /** Arithmetic mean of the input charts' Julian Days (UT). */
   jd_ut_mean: number;
-  /** Latitude the composite house wheel is cast for (mean of birth latitudes). */
+  /** Latitude the composite house wheel is cast for. */
   referenceLatitude: number;
+  /** Whether `referenceLatitude` came from the request or the mean-birth-latitude default. */
+  referenceLatitudeSource: "mean_birth_latitude" | "explicit";
   planets: CompositePoint[];
   houses: {
     system: HouseSystem;
@@ -77,6 +92,10 @@ export interface CompositeChart {
     isDayBirth: boolean;
   };
   aspects: Aspect[];
+  /** Aspect patterns among the composite points (South Node excluded). */
+  patterns: AspectPattern[];
+  /** Ruler of the composite Ascendant sign, its placement and aspects. */
+  chartRuler: ChartRuler;
   warnings: string[];
 }
 
@@ -149,7 +168,10 @@ export function calculateComposite(input: CompositeInput): CompositeChart {
   const warnings: string[] = [];
   const jdMean = charts.reduce((a, c) => a + c.jd_ut, 0) / count;
   const referenceLatitude =
+    input.reference_latitude ??
     input.charts.reduce((a, c) => a + c.latitude, 0) / count;
+  const referenceLatitudeSource =
+    input.reference_latitude != null ? "explicit" as const : "mean_birth_latitude" as const;
 
   // ── House wheel: composite MC → ARMC → cusps at the reference latitude ──
   const mcMid = circularMidpoint(charts.map((c) => c.houses.midheaven.longitude));
@@ -233,10 +255,14 @@ export function calculateComposite(input: CompositeInput): CompositeChart {
     house: p.house,
   }));
 
+  const aspects = computeAspects(natalShaped);
+  const ascendantSign = longitudeToSign(houses.ascendant).sign;
+
   return {
     chartCount: count,
     jd_ut_mean: jdMean,
     referenceLatitude,
+    referenceLatitudeSource,
     planets,
     houses: {
       system: houseSystem,
@@ -251,7 +277,9 @@ export function calculateComposite(input: CompositeInput): CompositeChart {
       vertex: { longitude: houses.vertex, sign: longitudeToSign(houses.vertex) },
     },
     partOfFortune,
-    aspects: computeAspects(natalShaped),
+    aspects,
+    patterns: detectAspectPatterns(patternPointsFromPlanets(natalShaped)),
+    chartRuler: computeChartRuler(ascendantSign, natalShaped, aspects, input.rulership),
     warnings,
   };
 }

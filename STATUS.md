@@ -23,9 +23,11 @@
   - **Composite** — midpoint chart from 2–10 births (circular-mean planets, houses derived from composite MC, PoF, internal aspects)
   - **Full transit combination matrix** — 13 transit × 19 natal points × 6 aspects with sign/house context on both sides; every aspect hit carries a stable `comboKey`; 17,784-key manifest (v2) + canonical `transit-matrix.ts` module
   - **Sky weather** — birth-chart-independent feed of retrograde stations, moon phases, sign ingresses, and eclipses (up to 20-year horizon)
+  - **Aspect patterns** — stellium (sign/house), grand trine, T-square, grand cross, yod, kite, mystic rectangle on every natal-style chart and the sky snapshot (element/modality + apex annotated; anchored to Diana/Einstein/Jobs/Mandela geometry and the 5 Feb 1962 seven-planet Aquarius stellium)
+  - **Chart ruler** — ruler of the ASC sign with placement + aspects; modern rulerships default, traditional per-request; both rulers always reported
 - **`/chart` UI page** — interactive form that fires all calculators and renders a full chart
 - Swagger UI at `/docs`, OpenAPI 3.1 spec at `/api/openapi.json`
-- **449/449 unit tests passing** including:
+- **491/491 unit tests passing** including:
   - 25 planet-position accuracy tests vs Astrodienst (Diana + Jobs) + 11 for Mandela (southern-hemisphere fixture)
   - 11 Sun-position cross-checks via independent Meeus VSOP (1879–2024)
   - 45 house-cusp tests across 7 systems + 14 Southern-Hemisphere Placidus cusp tests (Mandela)
@@ -45,7 +47,6 @@
 
 - ~~Vercel deploy + ephemeris bundle verification~~ — verified 2026-07-08, all endpoints return JSON in production
 - ~~Composite midpoint chart endpoint~~ — shipped 2026-07-24 (2–10 charts); Davison variant still deferred
-- Aspect-pattern detection (grand trine, T-square, …) and chart-ruler derivation — the two context factors not yet modeled (see TODO.md)
 - Cards of Destiny Planetary Ruling Card + Karma Cards (needs reference table)
 - Topocentric flag (Moon precision; concurrency design needed for sweph's global `set_topo`)
 - Sidereal zodiac with selectable ayanamsa
@@ -54,6 +55,7 @@
 
 | Date       | Author          | Change                                                                                                                                           |
 | ---------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-07-29 | Claude PM       | Aspect-pattern detection (7 pattern types, natal-style charts + sky snapshot), chart ruler (modern default / traditional flag, placement + aspects), composite `reference_latitude` — the three approved arsenal additions; 42 new tests (491 total) |
 | 2026-07-29 | Claude PM       | **v0.2.0 released to production**: verified full transit-combo coverage (old 4,536-key manifest had excluded Sun/Moon/Mercury/Venus/Mars + South Node on the transit side — PR #7's 17,784-key manifest v2 is the corrected full arsenal, counts re-verified from generator + live endpoints), reviewed + merged PR #7 into dev, reconciled dev/main histories (July 18 release was squash-merged, forking main — resolved by merging main back into dev; use merge commits for release PRs from now on), released dev→main (PR #8, merge commit), Vercel production deploy verified with live smoke tests |
 | 2026-07-24 | Claude PM       | Composite charts (`POST /api/v1/composite`, 2–10 births, circular-mean midpoints + MC-derived houses) and full transit combination matrix: canonical `transit-matrix.ts` (13×19×6 core, counts asserted in tests), context factors (`transitSign`/`transitHouse`/`transitRetrograde`/`comboKey`) on all overlay aspect hits, all 19 natal points exposed in transit/synastry/event-scanner, manifest v2 regenerated (17,784 keys, dimension-based format, 667KB vs 13.7MB naive), landing/OpenAPI/docs updated; 449 tests |
 | 2026-07-08 | Claude          | Framework standard: dev branch + CI on dev, Sentry (client/server/edge + global-error), favicon set (icon.svg + apple-icon), OG image, sitemap/robots, twitter metadata; production JSON bug verified fixed (issue #1) |
