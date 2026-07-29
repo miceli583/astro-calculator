@@ -1,6 +1,6 @@
 {
   "name": "astro-calculator",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Open-source calculator API for astrology, astrocartography, Human Design, Gene Keys, Life Path, and Destiny Cards. Powered by Swiss Ephemeris.",
   "private": false,
   "license": "AGPL-3.0-or-later",

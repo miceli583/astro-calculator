@@ -197,7 +197,7 @@ Computes the midpoint chart from **2 up to 10** natal births and returns it as a
 
 **Method.**
 - Each composite planet is the **circular mean** of that planet's natal positions across all charts. For two charts this is exactly the classic shorter-arc composite midpoint; for larger groups it generalizes to the direction of the mean unit vector. Directionally degenerate midpoints (positions that cancel out) fall back deterministically to the arithmetic mean and are flagged per-planet plus surfaced in `warnings`.
-- The house wheel uses the standard **derived-from-composite-MC** method (as Astrodienst does): the composite MC (circular mean of the natal MCs) fixes the ARMC via the obliquity of the ecliptic, and cusps/angles follow from `houses_armc` at a reference latitude (the mean of the birth latitudes). This always yields a coherent, monotonic wheel — averaging cusps directly does not.
+- The house wheel uses the standard **derived-from-composite-MC** method (as Astrodienst does): the composite MC (circular mean of the natal MCs) fixes the ARMC via the obliquity of the ecliptic, and cusps/angles follow from `houses_armc` at a reference latitude — by default the mean of the birth latitudes, or an explicit `reference_latitude` (e.g. where the couple lives, as Astro.com's reference-place option). The response reports the latitude used and its source. This always yields a coherent, monotonic wheel — averaging cusps directly does not.
 - Part of Fortune is computed from composite ASC/Sun/Moon with the same day/night rule as natal charts; internal aspects between composite planets use natal-scale orbs. Composite points don't move, so there are no speeds or retrograde flags.
 
 ---
@@ -248,8 +248,8 @@ Every aspect hit returned by `/transit/natal` and `/synastry` carries all contex
 | Retrograde phase | `transitRetrograde` on each aspect hit (momentary); retrograde stations via `/sky/events`; full loop phases via `/transit/events` (`isRetrogradeLoop`, `peaks[]`) |
 | Life stage | Planet-to-own-point events from `/transit/events` (Saturn return, Uranus opposition, Chiron return, nodal returns — scanned by default) and the `/astrology/planetary-return` endpoint |
 | Sky-weather backdrop | `/sky/events` (stations, lunations, ingresses, eclipses) |
-| Aspect patterns (grand trine, T-square, …) | Not yet modeled — roadmap (see TODO.md) |
-| Chart-ruler role | Not yet modeled (needs a rulership table) — roadmap (see TODO.md) |
+| Aspect patterns (stellium, grand trine, T-square, grand cross, yod, kite, mystic rectangle) | `patterns` on every natal-style chart (natal, returns, composite, the natal chart inside `/transit/natal` + `/synastry` responses) and on the sky snapshot (`/transit`, sign-based). Detected by `detectAspectPatterns` with element/modality annotation and apex identification; South Node excluded; grand-cross-contained T-squares suppressed |
+| Chart-ruler role | `chartRuler` on every natal-style chart — ruler of the ASC sign (modern rulerships default, `rulership: "traditional"` per request; both rulers always reported) with placement + all its chart aspects |
 
 To support keyed lookups, consumers use manifest keys (or runtime `comboKey` prefixes) to attach their own theming.
 

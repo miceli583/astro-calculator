@@ -45,7 +45,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             content: { "application/json": { schema: { $ref: "#/components/schemas/NatalInput" } } },
           },
           responses: {
-            "200": { description: "Natal chart with planets, houses, aspects" },
+            "200": { description: "Natal chart with planets, houses, aspects, aspect patterns (stellium, grand trine, T-square, grand cross, yod, kite, mystic rectangle), and the chart ruler (ruler of the Ascendant sign with placement + aspects)" },
             "422": { description: "Invalid input" },
           },
         },
@@ -67,7 +67,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
           },
-          responses: { "200": { description: "Planet longitudes, signs, and HD gates for the given moment" } },
+          responses: { "200": { description: "Planet longitudes, signs, HD gates, and sky-wide aspect patterns (sign-based) for the given moment" } },
         },
       },
       "/api/v1/transit/natal": {
@@ -110,12 +110,12 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
         post: {
           summary: "Composite (midpoint) chart from 2–10 birth charts",
           description:
-            "Synthesizes one chart from several people's natal midpoints — the chart 'of the relationship'. Each composite planet is the circular mean of that planet's natal positions (for two charts, the classic shorter-arc midpoint). The house wheel is derived from the composite MC at the mean birth latitude.",
+            "Synthesizes one chart from several people's natal midpoints — the chart 'of the relationship'. Each composite planet is the circular mean of that planet's natal positions (for two charts, the classic shorter-arc midpoint). The house wheel is derived from the composite MC at the mean birth latitude, or at an explicit `reference_latitude` (e.g. where the couple lives).",
           requestBody: {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/CompositeInput" } } },
           },
-          responses: { "200": { description: "Natal-style composite chart: midpoint planets with sign + house, derived house wheel, Part of Fortune, and internal aspects" } },
+          responses: { "200": { description: "Natal-style composite chart: midpoint planets with sign + house, derived house wheel, Part of Fortune, internal aspects, aspect patterns, and the composite chart ruler" } },
         },
       },
       "/api/v1/astrology/progressions": {
@@ -241,9 +241,17 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
                   items: { type: "string" },
                   description: "Optional subset of planets to compute",
                 },
+                rulership: { $ref: "#/components/schemas/RulershipConvention" },
               },
             },
           ],
+        },
+        RulershipConvention: {
+          type: "string",
+          enum: ["modern", "traditional"],
+          default: "modern",
+          description:
+            "Rulership table for the chart ruler. Modern: Scorpio→Pluto, Aquarius→Uranus, Pisces→Neptune. Traditional: Scorpio→Mars, Aquarius→Saturn, Pisces→Jupiter. Both rulers are always reported where the conventions differ.",
         },
         TransitInput: {
           type: "object",
@@ -351,6 +359,14 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
               default: "placidus",
               description: "House system for the composite wheel",
             },
+            reference_latitude: {
+              type: "number",
+              minimum: -90,
+              maximum: 90,
+              description:
+                "Latitude to cast the composite house wheel for (e.g. where the couple lives). Defaults to the arithmetic mean of the birth latitudes (Astrodienst method). The response reports the latitude used and its source.",
+            },
+            rulership: { $ref: "#/components/schemas/RulershipConvention" },
           },
         },
         DateOnly: {

@@ -6,6 +6,34 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-07-29
+
+### Added
+
+- **Aspect-pattern detection** (`detectAspectPatterns`): stellium (sign- and
+  house-based), grand trine, T-square, grand cross, yod, kite, and mystic
+  rectangle, with element/modality annotation, apex identification, and
+  max-orb reporting. Emitted on every natal-style chart (`patterns` field on
+  natal, solar-return, planetary-return, composite, and the natal chart inside
+  transit/synastry responses) and on the pure sky snapshot (`POST
+  /api/v1/transit` — sign-based patterns in the transiting sky). T-squares
+  contained in a grand cross are suppressed; the derived South Node is
+  excluded from detection.
+- **Chart ruler** (`chartRuler` field on natal-style charts): ruler of the
+  Ascendant sign with its placement (sign/house/retrograde) and every chart
+  aspect it participates in. Modern rulerships by default
+  (Scorpio→Pluto, Aquarius→Uranus, Pisces→Neptune); traditional table
+  selectable per request via `rulership: "traditional"`; both conventions'
+  rulers always reported. Rulership tables exported from
+  `src/lib/constants/rulerships.ts`.
+- **Composite `reference_latitude`** — optional input on `POST
+  /api/v1/composite` to cast the composite house wheel for a reference place
+  (e.g. where the couple lives). Default unchanged (arithmetic mean of birth
+  latitudes); the response now reports `referenceLatitudeSource`
+  (`"mean_birth_latitude"` or `"explicit"`).
+
+## [0.2.0] — 2026-07-29
+
 ### Added
 
 - `POST /api/v1/composite` — composite (midpoint) chart from **2–10** birth
