@@ -7,6 +7,7 @@
 
 import { calculateNatalChart, type NatalChart, type NatalInput } from "./astrology";
 import {
+  buildNatalOverlayPoints,
   computeOverlay,
   DEFAULT_SYNASTRY_ORBS,
   type AspectType,
@@ -43,23 +44,14 @@ export function calculateSynastry(input: SynastryInput): SynastryResult {
 
   const orbs = { ...DEFAULT_SYNASTRY_ORBS, ...input.orbs };
 
-  const buildPoints = (chart: NatalChart) => [
-    ...chart.planets.map((p) => ({
-      name: p.name as string,
-      longitude: p.longitude,
-      speed: p.speed,
-      retrograde: p.retrograde,
-    })),
-    { name: "asc", longitude: chart.houses.ascendant.longitude, speed: 0 },
-    { name: "mc",  longitude: chart.houses.midheaven.longitude, speed: 0 },
-  ];
-
+  // Every modeled point on both sides — planets + South Node, four angles,
+  // Vertex, PoF — via the shared builder used by the transit endpoints.
   const aChart = {
-    points: buildPoints(personA),
+    points: buildNatalOverlayPoints(personA),
     cusps: personA.houses.cusps.map((c) => c.longitude),
   };
   const bChart = {
-    points: buildPoints(personB),
+    points: buildNatalOverlayPoints(personB),
     cusps: personB.houses.cusps.map((c) => c.longitude),
   };
 

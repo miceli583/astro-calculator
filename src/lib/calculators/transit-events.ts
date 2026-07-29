@@ -8,9 +8,11 @@ import {
   ASPECT_ANGLES,
   DEFAULT_TRANSIT_ORBS,
   angularDifference,
+  buildNatalOverlayPoints,
   houseFor,
   type AspectType,
 } from "./overlay";
+import { MATRIX_NATAL_POINTS } from "../constants/transit-matrix";
 
 /** Slow bodies whose transits produce multi-month/year themes. */
 export const DEFAULT_EVENT_TRANSIT_PLANETS: readonly PlanetName[] = [
@@ -23,18 +25,15 @@ export const DEFAULT_EVENT_TRANSIT_PLANETS: readonly PlanetName[] = [
   "true_node",
 ];
 
-/** Natal points meaningful enough to warrant themed events. */
-export const DEFAULT_EVENT_NATAL_POINTS: readonly string[] = [
-  "sun",
-  "moon",
-  "mercury",
-  "venus",
-  "mars",
-  "asc",
-  "mc",
-  "ic",
-  "dsc",
-];
+/**
+ * Natal points scanned by default: the full combination-matrix point space
+ * (all modeled planets + South Node, four angles, Vertex, Part of Fortune).
+ * Point-window extraction is cheap arithmetic over already-sampled planet
+ * positions, so the full set adds little cost — and slow-planet contacts to
+ * a chart's own outer planets are exactly the life-stage markers (Saturn
+ * return, Uranus opposition, Chiron return, nodal returns).
+ */
+export const DEFAULT_EVENT_NATAL_POINTS: readonly string[] = MATRIX_NATAL_POINTS;
 
 /** Max scan window — 20 years matches the spec cap. */
 export const MAX_SCAN_YEARS = 20;
@@ -306,15 +305,7 @@ function refineExactAspect(
 
 /** Build the full natal-point list including derived points (Angles, South Node). */
 function buildNatalPointList(chart: NatalChart): Array<{ name: string; longitude: number }> {
-  const out: Array<{ name: string; longitude: number }> = chart.planets.map((p) => ({
-    name: p.name,
-    longitude: p.longitude,
-  }));
-  out.push({ name: "asc", longitude: chart.houses.ascendant.longitude });
-  out.push({ name: "mc",  longitude: chart.houses.midheaven.longitude });
-  out.push({ name: "ic",  longitude: (chart.houses.midheaven.longitude + 180) % 360 });
-  out.push({ name: "dsc", longitude: (chart.houses.ascendant.longitude + 180) % 360 });
-  return out;
+  return buildNatalOverlayPoints(chart).map((p) => ({ name: p.name, longitude: p.longitude }));
 }
 
 function dateStringToJd(iso: string): number {

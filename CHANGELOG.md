@@ -8,6 +8,27 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `POST /api/v1/composite` — composite (midpoint) chart from **2–10** birth
+  charts: circular-mean planet midpoints (classic shorter-arc midpoint for
+  pairs), house wheel derived from the composite MC via ARMC at the mean birth
+  latitude (Astrodienst method), Part of Fortune, internal aspects, degenerate
+  midpoints flagged. Backed by `calculateComposite` + `circularMidpoint` with
+  21 unit tests.
+- Full transit combination matrix: canonical dimension module
+  `src/lib/constants/transit-matrix.ts` (13 transit points × 19 natal points ×
+  the 6 agreed aspects; 1,482 core pairings, 17,784 sign-keyed keys,
+  30,730,752 full-context combinations — all counts test-asserted) with
+  enumeration helpers and `buildComboKey`.
+- Overlay aspect hits (`/transit/natal`, `/synastry`) now carry full context
+  factors: `transitSign`, `transitHouse`, `transitRetrograde`, and a stable
+  `comboKey` whose first four segments match the legacy manifest key.
+- All 19 modeled natal points (planets + South Node, ASC/MC/IC/DSC, Vertex,
+  Part of Fortune) are exposed on the natal side of transit-to-natal,
+  synastry (both sides), and the transit event scanner via shared
+  `buildNatalOverlayPoints`.
+- Ephemeris client: `obliquity()` and `calcHousesFromArmc()` (sweph
+  `houses_armc`) for ARMC-derived house wheels.
+
 - `POST /api/v1/astrology/planetary-return` — first return of Sun / Mercury /
   Venus / Mars / Jupiter / Saturn on or after any `after_datetime`, optionally
   relocated. Backed by `calculatePlanetaryReturn` with an orbital-period-aware
@@ -28,6 +49,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `transit-combinations.json` regenerated as **manifest v2**: full point sets
+  (was 7×9, now 13×19 → 17,784 keys), restructured to a dimension-based format
+  (dimensions stated once + materialized key list + empty prose map) — 667 KB
+  instead of 13.7 MB for the naive per-entry format. All published v1 prose
+  fields were empty, so no information is lost; key format is unchanged.
+- Transit event scanner default natal points expanded from 9 to all 19 —
+  slow-planet contacts to a chart's own outer points are the classic
+  life-stage markers (Saturn return, Uranus opposition, Chiron return, nodal
+  returns) and now surface by default.
 - Migrated ESLint from deprecated `next lint` to `eslint .` with the flat
   config exports from `eslint-config-next` 16.
 - `<a href="/">` in `/chart` header replaced with Next `<Link>` for

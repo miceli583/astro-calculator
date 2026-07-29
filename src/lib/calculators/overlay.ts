@@ -12,7 +12,7 @@
 //      a channel in transit or connection charts).
 //   3. House overlays — which of A's houses each of B's points falls into.
 
-import { longitudeToSign } from "./astrology";
+import { longitudeToSign, type NatalChart } from "./astrology";
 import { longitudeToGate } from "../constants/hd-gates";
 
 export type AspectType =
@@ -89,6 +89,48 @@ export interface AspectHit {
   natalSign?: string;
   /** House the natal point occupies (1-12). Present only if natal.cusps provided. */
   natalHouse?: number;
+  /** Zodiac sign the transiting/partner point occupies. */
+  transitSign?: string;
+  /** Natal house the transiting/partner point falls in. Present only if natal.cusps provided. */
+  transitHouse?: number;
+  /** Whether the transiting/partner point is retrograde (from its speed if not given). */
+  transitRetrograde?: boolean;
+  /**
+   * Stable combination-matrix lookup key for this hit, built from every
+   * available context factor. See `buildComboKey` for the format.
+   */
+  comboKey?: string;
+}
+
+export interface ComboKeyFactors {
+  transitPoint: string;
+  aspect: AspectType;
+  natalPoint: string;
+  natalSign?: string;
+  natalHouse?: number;
+  transitSign?: string;
+  transitHouse?: number;
+}
+
+/**
+ * Build the stable lookup key for a transit/synastry combination.
+ *
+ * Format (segments joined with "."):
+ *   `<transitPoint>.<aspect>.<natalPoint>[.<natalSign>][.h<natalHouse>][.<transitSign>][.h<transitHouse>]`
+ *
+ * The first four segments (`saturn.conjunction.sun.Aries`) match the legacy
+ * manifest key format in `transit-combinations.json`, so existing consumer
+ * keying keeps working as a prefix match. House segments are prefixed with
+ * `h` to distinguish them from sign names, and are simply omitted where not
+ * applicable (e.g. no natal cusps available).
+ */
+export function buildComboKey(f: ComboKeyFactors): string {
+  const parts: string[] = [f.transitPoint, f.aspect, f.natalPoint];
+  if (f.natalSign) parts.push(f.natalSign);
+  if (f.natalHouse != null) parts.push(`h${f.natalHouse}`);
+  if (f.transitSign) parts.push(f.transitSign);
+  if (f.transitHouse != null) parts.push(`h${f.transitHouse}`);
+  return parts.join(".");
 }
 
 export interface HdActivation {
@@ -147,6 +189,9 @@ export function computeOverlay(
 
   const aspects: AspectHit[] = [];
   for (const o of other.points) {
+    const transitSign = longitudeToSign(o.longitude).sign;
+    const transitHouse = natal.cusps ? houseFor(o.longitude, natal.cusps) : undefined;
+    const transitRetrograde = o.retrograde ?? (o.speed != null ? o.speed < 0 : undefined);
     for (const n of natal.points) {
       const sep = angularDifference(o.longitude, n.longitude);
       for (const a of enabledAspects) {
@@ -160,6 +205,8 @@ export function computeOverlay(
           const sepFuture = angularDifference(future, n.longitude);
           applying = Math.abs(sepFuture - target) < orb;
         }
+        const natalSign = longitudeToSign(n.longitude).sign;
+        const natalHouse = natal.cusps ? houseFor(n.longitude, natal.cusps) : undefined;
         aspects.push({
           transitPoint: o.name,
           natalPoint: n.name,
@@ -167,8 +214,20 @@ export function computeOverlay(
           exactAngle: target,
           orb,
           applying,
-          natalSign: longitudeToSign(n.longitude).sign,
-          natalHouse: natal.cusps ? houseFor(n.longitude, natal.cusps) : undefined,
+          natalSign,
+          natalHouse,
+          transitSign,
+          transitHouse,
+          transitRetrograde,
+          comboKey: buildComboKey({
+            transitPoint: o.name,
+            aspect: a,
+            natalPoint: n.name,
+            natalSign,
+            natalHouse,
+            transitSign,
+            transitHouse,
+          }),
         });
         break; // one aspect per pair (the tightest matches first by iteration order)
       }
@@ -205,6 +264,33 @@ export function computeOverlay(
   }
 
   return { aspects, hdActivations, houseOverlays };
+}
+
+/**
+ * Every overlay-able point a natal chart models, as OverlayPoints: the full
+ * planet list (including the derived South Node) plus the four chart angles
+ * (ASC/MC/IC/DSC), the Vertex, and the Part of Fortune.
+ *
+ * Shared by transit-to-natal, synastry, and the transit event scanner so all
+ * three expose the same complete natal-point space.
+ */
+export function buildNatalOverlayPoints(chart: NatalChart): OverlayPoint[] {
+  const asc = chart.houses.ascendant.longitude;
+  const mc = chart.houses.midheaven.longitude;
+  return [
+    ...chart.planets.map((p) => ({
+      name: p.name as string,
+      longitude: p.longitude,
+      speed: p.speed,
+      retrograde: p.retrograde,
+    })),
+    { name: "asc", longitude: asc, speed: 0 },
+    { name: "mc", longitude: mc, speed: 0 },
+    { name: "ic", longitude: (mc + 180) % 360, speed: 0 },
+    { name: "dsc", longitude: (asc + 180) % 360, speed: 0 },
+    { name: "vertex", longitude: chart.houses.vertex.longitude, speed: 0 },
+    { name: "part_of_fortune", longitude: chart.partOfFortune.longitude, speed: 0 },
+  ];
 }
 
 /** Absolute angular distance between two longitudes in [0, 180]. */

@@ -182,6 +182,43 @@ export function calcHouses(
   };
 }
 
+/** True obliquity of the ecliptic in degrees at a UT Julian Day. */
+export function obliquity(jdUt: number): number {
+  const swe = getSwe();
+  const out = swe.calc_ut(jdUt, swe.constants.SE_ECL_NUT, SE_FLAGS);
+  if ("error" in out && out.error) {
+    throw new Error(`Ephemeris error for obliquity: ${out.error}`);
+  }
+  return out.data[0];
+}
+
+/**
+ * House cusps computed from an ARMC (right ascension of the MC, in degrees)
+ * rather than from a moment + place. This is how composite-chart house wheels
+ * are cast: the composite MC fixes the ARMC, and the cusps follow for a
+ * reference latitude. Same return shape as `calcHouses`.
+ */
+export function calcHousesFromArmc(
+  armc: number,
+  latitude: number,
+  eps: number,
+  system: HouseSystem
+): HousesResult {
+  const swe = getSwe();
+  const code = HOUSE_SYSTEMS[system];
+  const result = swe.houses_armc(armc, latitude, eps, code);
+  const cusps = result.data.houses;
+  const points = result.data.points;
+  return {
+    cusps,
+    ascendant: points[0],
+    midheaven: points[1],
+    armc: points[2],
+    vertex: points[3],
+    equatorialAscendant: points[4],
+  };
+}
+
 // Equatorial coordinates (right ascension, declination) — needed for astrocartography.
 // Flag 2048 (SEFLG_EQUATORIAL) tells sweph to return RA/Dec instead of ecliptic.
 const SE_FLAG_EQ = 2 | 256 | 2048;

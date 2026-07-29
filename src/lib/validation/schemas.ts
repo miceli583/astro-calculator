@@ -132,6 +132,15 @@ export const synastryInputSchema = z.object({
   orbs: orbOverrideSchema.optional(),
 });
 
+export const compositeInputSchema = z.object({
+  // 2–10 charts: the classic pair composite up to a ten-person group composite.
+  charts: z
+    .array(birthDataSchema)
+    .min(2, "A composite chart needs at least 2 charts")
+    .max(10, "A composite chart supports at most 10 charts"),
+  house_system: houseSystemSchema.optional(),
+});
+
 export const geocodeInputSchema = z.object({
   query: z.string().min(2).max(200),
   limit: z.number().int().min(1).max(10).optional(),
@@ -191,6 +200,7 @@ export type TransitToNatalInput = z.infer<typeof transitToNatalInputSchema>;
 export type TransitEventsInput = z.infer<typeof transitEventsInputSchema>;
 export type SkyEventsInput = z.infer<typeof skyEventsInputSchema>;
 export type SynastryInput = z.infer<typeof synastryInputSchema>;
+export type CompositeInput = z.infer<typeof compositeInputSchema>;
 
 export type BirthDataInput = z.infer<typeof birthDataSchema>;
 export type DateOnlyInput = z.infer<typeof dateOnlySchema>;
