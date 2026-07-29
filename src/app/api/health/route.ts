@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { env } from "@/env.js";
+import { version } from "../../../../package.json";
 
 export const runtime = "nodejs";
 
@@ -7,7 +7,7 @@ export function GET() {
   return NextResponse.json({
     status: "ok",
     service: "astro-calculator",
-    version: env.npm_package_version ?? "0.1.0",
+    version,
     timestamp: new Date().toISOString(),
   });
 }
