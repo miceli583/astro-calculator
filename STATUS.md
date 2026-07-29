@@ -1,7 +1,7 @@
 # Status
 
 **Last updated:** 2026-07-29
-**Last updated by:** Claude PM (v0.2.0 release to production)
+**Last updated by:** Claude PM (v0.3.0 release to production)
 
 ## What works
 
@@ -55,7 +55,7 @@
 
 | Date       | Author          | Change                                                                                                                                           |
 | ---------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 2026-07-29 | Claude PM       | Aspect-pattern detection (7 pattern types, natal-style charts + sky snapshot), chart ruler (modern default / traditional flag, placement + aspects), composite `reference_latitude` — the three approved arsenal additions; 42 new tests (491 total) |
+| 2026-07-29 | Claude PM       | **v0.3.0 released to production**: aspect-pattern detection (7 pattern types, natal-style charts + sky snapshot), chart ruler (modern default / traditional flag, placement + aspects), composite `reference_latitude` — the three approved arsenal additions; 42 new tests (491 total); PR #9 → dev, release PR #10 → main (merge commits), live prod verification incl. the 5 Feb 1962 seven-planet Aquarius stellium |
 | 2026-07-29 | Claude PM       | **v0.2.0 released to production**: verified full transit-combo coverage (old 4,536-key manifest had excluded Sun/Moon/Mercury/Venus/Mars + South Node on the transit side — PR #7's 17,784-key manifest v2 is the corrected full arsenal, counts re-verified from generator + live endpoints), reviewed + merged PR #7 into dev, reconciled dev/main histories (July 18 release was squash-merged, forking main — resolved by merging main back into dev; use merge commits for release PRs from now on), released dev→main (PR #8, merge commit), Vercel production deploy verified with live smoke tests |
 | 2026-07-24 | Claude PM       | Composite charts (`POST /api/v1/composite`, 2–10 births, circular-mean midpoints + MC-derived houses) and full transit combination matrix: canonical `transit-matrix.ts` (13×19×6 core, counts asserted in tests), context factors (`transitSign`/`transitHouse`/`transitRetrograde`/`comboKey`) on all overlay aspect hits, all 19 natal points exposed in transit/synastry/event-scanner, manifest v2 regenerated (17,784 keys, dimension-based format, 667KB vs 13.7MB naive), landing/OpenAPI/docs updated; 449 tests |
 | 2026-07-08 | Claude          | Framework standard: dev branch + CI on dev, Sentry (client/server/edge + global-error), favicon set (icon.svg + apple-icon), OG image, sitemap/robots, twitter metadata; production JSON bug verified fixed (issue #1) |
