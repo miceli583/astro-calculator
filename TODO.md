@@ -6,7 +6,7 @@
 
 ## Bugs (broken functionality)
 
-- [ ] None known
+- [ ] **Every birth date before 1800 returns a 500.** `calcPlanet` in `src/lib/ephemeris/client.ts` throws on any non-empty `out.error`, but sweph uses that field for *warnings* too and signals real failure via `flag < 0`. With no `sepl_12.se1` shipped, pre-1800 charts get the warning `SwissEph file 'sepl_12.se1' not found ... using Moshier eph.` and 500. Verified end-to-end: 1799 throws, 1883 and 1950 are fine. Found by the L1 accuracy harness; full write-up and the three candidate dispositions in `docs/accuracy.md` §6 (F1). Chiron is a separate case — sweph genuinely refuses it pre-1800 (F2).
 
 ## Tech Debt (code quality)
 
