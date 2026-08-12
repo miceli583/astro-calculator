@@ -53,6 +53,53 @@ a:hover { border-bottom-color: var(--accent); }
   .kv-stack-on-mobile > :first-child { flex: 0 0 auto !important; }
 }
 
+/* Sky-weather event rows (/sky).
+   The date cell is fixed-width monospace ("Sep 04 · 07:50"), so the column is
+   sized to its own content — a hard pixel width let the text paint outside its
+   box and land on top of the event glyph. max-content stays uniform across rows
+   because every row's string is the same length. */
+.sky-event-row {
+  display: grid;
+  grid-template-columns: max-content 1fr max-content;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+  align-items: baseline;
+}
+
+@media (max-width: 600px) {
+  /* Three columns cannot share ~290px without shredding the title into
+     one-word lines. Date and kind share a meta line; the event gets the width. */
+  .sky-event-row {
+    grid-template-columns: max-content 1fr;
+    gap: 0.25rem 1rem;
+  }
+  .sky-event-row > :nth-child(1) { grid-column: 1; grid-row: 1; }
+  .sky-event-row > :nth-child(3) { grid-column: 2; grid-row: 1; text-align: right; }
+  .sky-event-row > :nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* Transit event rows (/chart → Transits).
+   The date-range cell is nowrap monospace, so on a phone it claimed 166px of a
+   292px row and starved the 1fr description column down to 84px — its text then
+   painted 10px past its own box and landed on the dates. Stacking gives the
+   description the full width and the range its own line. */
+.transit-event-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.transit-event-row > :nth-child(2) { text-align: right; }
+
+@media (max-width: 600px) {
+  .transit-event-row { grid-template-columns: 1fr; }
+  .transit-event-row > :nth-child(2) { text-align: left; }
+}
+
 /* Shared input styling used by the birth-data forms on /chart and inside the
    Synastry sub-tab. Kept in globals.css so any consumer of the .birth-input
    wrapper class inherits the same look — no inline <style> blocks needed. */

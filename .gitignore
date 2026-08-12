@@ -46,3 +46,8 @@ ephemeris/*.txt
 
 # local drafts (private, consumer-side prompts)
 soul-map-prompt.md
+
+# internal ops working dirs — this repo is public (see CLAUDE.md), and these
+# hold mission-scoped evidence, scratch harness scripts, and browser logs.
+.hermes/
+.playwright-mcp/
