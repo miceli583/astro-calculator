@@ -347,17 +347,7 @@ function EventsFeed({ events }: { events: SkyEvent[] }) {
 function EventRow({ ev }: { ev: SkyEvent }) {
   const meta = eventMeta(ev);
   return (
-    <div
-      className="sky-event-row"
-      style={{
-        display: "grid",
-        gridTemplateColumns: "80px 1fr auto",
-        gap: "1rem",
-        padding: "0.75rem 0",
-        borderBottom: "1px solid var(--border)",
-        alignItems: "baseline",
-      }}
-    >
+    <div className="sky-event-row">
       <div
         style={{
           color: "var(--muted)",

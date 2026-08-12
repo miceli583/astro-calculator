@@ -10,6 +10,7 @@
 
 ## Tech Debt (code quality)
 
+- [ ] OpenAPI: `/api/v1/synastry` requestBody `$ref`s `BirthData` but the real input is `{personA, personB, aspects?, orbs?}` — add a proper `SynastryInput` component in `src/lib/openapi/spec.ts` (also the only place the new `rulership` option is undocumented; other endpoints get it via the `NatalInput` $ref). Found in v0.3.0 contract audit, pre-existing.
 - [ ] Additional strict-lint pass — current setup enforces zero warnings; consider narrower ESLint overrides file-by-file if needed.
 
 ## Enhancements (nice to have)
@@ -24,6 +25,7 @@
 - [ ] Sidereal zodiac with selectable ayanamsa (Lahiri / Krishnamurti / Fagan-Bradley)
 - [ ] Caching layer (in-memory LRU + Vercel Runtime Cache)
 - [ ] Rate limiting via Vercel Firewall WAF rules
+- [ ] OpenAPI response schemas — responses are currently description-only, so consumers can't codegen response types (`patterns`, `chartRuler`, `referenceLatitudeSource` documented only in prose); ideally derive from Zod output schemas. Found in v0.3.0 contract audit.
 - [ ] SDK packages (`@astro-calculator/client-ts`, Python)
 - [ ] Render astrocartography lines on an interactive world map in `/chart`
 - [ ] Cross-validate Mandela fixture values against Astrodienst once its Cloudflare gate is passable (currently seeded from our sweph-based calculator).

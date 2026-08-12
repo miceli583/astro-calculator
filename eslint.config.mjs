@@ -5,7 +5,8 @@ const config = [
   ...coreWebVitals,
   ...typescript,
   {
-    ignores: ["ephemeris/**", "scripts/**"],
+    // .hermes/.playwright-mcp are gitignored ops working dirs, not app source.
+    ignores: ["ephemeris/**", "scripts/**", ".hermes/**", ".playwright-mcp/**"],
   },
 ];
 

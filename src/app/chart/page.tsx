@@ -216,7 +216,7 @@ function TabBar({ active, onChange }: { active: ResultsTab; onChange: (t: Result
               border: "none",
               padding: "0.75rem 0",
               marginBottom: -1,
-              color: isActive ? "var(--text)" : "var(--muted)",
+              color: isActive ? "var(--fg)" : "var(--muted)",
               borderBottom: isActive ? "2px solid var(--accent)" : "2px solid transparent",
               cursor: "pointer",
               fontSize: 15,
@@ -332,7 +332,7 @@ function TransitsTab({ form }: { form: BirthForm }) {
             style={{
               marginLeft: "0.5rem",
               background: "var(--card)",
-              color: "var(--text)",
+              color: "var(--fg)",
               border: "1px solid var(--border)",
               borderRadius: 6,
               padding: "0.4rem 0.6rem",
@@ -600,17 +600,7 @@ function EventsList({ events }: { events: TransitEvent[] }) {
 
 function EventRow({ e }: { e: TransitEvent }) {
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr auto",
-        gap: "0.5rem 1rem",
-        padding: "0.75rem",
-        borderRadius: 6,
-        background: "var(--bg)",
-        border: "1px solid var(--border)",
-      }}
-    >
+    <div className="transit-event-row">
       <div style={{ fontSize: 14, minWidth: 0 }}>
         <span style={{ fontWeight: 500 }}>{cap(e.transitPlanet)}</span>
         <span style={{ margin: "0 0.5rem", color: "var(--muted)" }}>{aspSymbol(e.aspect)}</span>
@@ -642,7 +632,6 @@ function EventRow({ e }: { e: TransitEvent }) {
           fontSize: 12,
           color: "var(--muted)",
           fontFamily: "ui-monospace, monospace",
-          textAlign: "right",
           whiteSpace: "nowrap",
         }}
       >
