@@ -18,6 +18,7 @@
     "test:watch": "vitest",
     "ephe:download": "node scripts/download-ephemeris.mjs",
     "transits:generate-combinations": "node scripts/generate-transit-combinations.mjs",
+    "audit:timezones": "node scripts/audit-timezone-offsets.mjs",
     "postinstall": "node scripts/download-ephemeris.mjs --quiet"
   },
   "dependencies": {

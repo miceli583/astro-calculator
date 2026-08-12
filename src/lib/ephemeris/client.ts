@@ -7,7 +7,13 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { env } from "@/env.js";
-import { parseLocalISO, toUTC, type ParsedDateTime } from "./julian-day";
+import {
+  parseLocalISO,
+  toUTC,
+  toUTCResolved,
+  type LocalTimeKind,
+  type ParsedDateTime,
+} from "./julian-day";
 
 const require = createRequire(import.meta.url);
 
@@ -124,10 +130,20 @@ export interface HousesResult {
   equatorialAscendant: number;
 }
 
-// Convert ISO local datetime + IANA timezone to a UT Julian Day.
-export function julianDayUT(localIso: string, timeZone: string): number {
+/**
+ * Convert ISO local datetime + IANA timezone to a UT Julian Day, also reporting
+ * how the wall clock mapped onto the timeline. `kind` is "unique" for every
+ * ordinary birth time; "gap" and "ambiguous" mean the local reading does not
+ * identify a single instant and a convention was applied to pick one. Callers
+ * with a warnings channel should surface those two — the resulting chart is
+ * defensible but not uniquely determined by the input.
+ */
+export function julianDayUTResolved(
+  localIso: string,
+  timeZone: string
+): { jd: number; utc: ParsedDateTime; offsetMinutes: number; kind: LocalTimeKind } {
   const local = parseLocalISO(localIso);
-  const utc = toUTC(local, timeZone);
+  const { utc, offsetMinutes, kind } = toUTCResolved(local, timeZone);
   const swe = getSwe();
   const result = swe.utc_to_jd(
     utc.year,
@@ -140,7 +156,12 @@ export function julianDayUT(localIso: string, timeZone: string): number {
   );
   // sweph returns { data: [jd_et, jd_ut], ... }
   // We use UT for chart calculations.
-  return result.data[1];
+  return { jd: result.data[1], utc, offsetMinutes, kind };
+}
+
+// Convert ISO local datetime + IANA timezone to a UT Julian Day.
+export function julianDayUT(localIso: string, timeZone: string): number {
+  return julianDayUTResolved(localIso, timeZone).jd;
 }
 
 export function calcPlanet(jdUt: number, planet: PlanetName): PlanetPosition {
@@ -247,6 +268,7 @@ export function greenwichSiderealTimeDeg(jdUt: number): number {
 }
 
 export type ParsedDateTimeUtc = ParsedDateTime;
+export type { LocalTimeKind };
 
 // Re-export for convenience
-export { parseLocalISO, toUTC };
+export { parseLocalISO, toUTC, toUTCResolved };

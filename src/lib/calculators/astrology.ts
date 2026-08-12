@@ -6,6 +6,7 @@ import {
   calcHouses,
   calcPlanet,
   julianDayUT,
+  julianDayUTResolved,
   type HouseSystem,
   type PlanetName,
   type PlanetPosition,
@@ -282,11 +283,24 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
   const houseSystem = input.house_system ?? "placidus";
   const planetList = input.planets ?? DEFAULT_PLANETS;
 
-  const jd = julianDayUT(input.datetime, input.timezone);
+  const { jd, kind: timeKind } = julianDayUTResolved(input.datetime, input.timezone);
   const positions = calcAllPlanets(jd, planetList);
   const houses = calcHouses(jd, input.latitude, input.longitude, houseSystem);
 
   const warnings: string[] = [];
+  if (timeKind === "gap") {
+    warnings.push(
+      `Local time ${input.datetime} does not exist in ${input.timezone}: it falls inside ` +
+      `an hour skipped by a daylight-saving transition. The chart was cast one hour ` +
+      `later, past the gap. Verify the recorded birth time.`
+    );
+  } else if (timeKind === "ambiguous") {
+    warnings.push(
+      `Local time ${input.datetime} occurs twice in ${input.timezone} because of a ` +
+      `daylight-saving transition. The chart was cast for the FIRST occurrence ` +
+      `(daylight time); the second is one hour later and gives a different chart.`
+    );
+  }
   if (Math.abs(input.latitude) >= HIGH_LATITUDE_THRESHOLD && QUADRANT_SYSTEMS.has(houseSystem)) {
     warnings.push(
       `Latitude ${input.latitude.toFixed(2)}° is at or beyond the polar circle; ` +
