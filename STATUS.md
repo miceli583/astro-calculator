@@ -1,7 +1,7 @@
 # Status
 
-**Last updated:** 2026-07-30
-**Last updated by:** Claude PM (v0.3.0 post-release contract audit)
+**Last updated:** 2026-08-12
+**Last updated by:** Claude PM (render-check harness pilot + UI fix pass)
 
 ## What works
 
@@ -27,6 +27,9 @@
   - **Chart ruler** — ruler of the ASC sign with placement + aspects; modern rulerships default, traditional per-request; both rulers always reported
 - **`/chart` UI page** — interactive form that fires all calculators and renders a full chart
 - Swagger UI at `/docs`, OpenAPI 3.1 spec at `/api/openapi.json`
+- **UI verified by a deterministic browser render check** — 7 rendered states (`/`, `/chart` empty
+  + results + transits + synastry, `/sky`, `/docs`) × 390/768/1440 = 21 cells, zero text-overlap /
+  overflow / clipping findings, zero console errors, in local dev and on production
 - **491/491 unit tests passing** including:
   - 25 planet-position accuracy tests vs Astrodienst (Diana + Jobs) + 11 for Mandela (southern-hemisphere fixture)
   - 11 Sun-position cross-checks via independent Meeus VSOP (1879–2024)
@@ -55,6 +58,7 @@
 
 | Date       | Author          | Change                                                                                                                                           |
 | ---------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-08-12 | Claude PM       | **UI render-check pass (PR #12 → dev, PR #13 → main)**: fixed `/sky` event-row text overlap (123 rows, all viewports — reported by Matthew) and the same class of defect on `/chart` → Transits at 390px (48 rows), both caused by a `white-space: nowrap` grid track starving its `1fr` sibling; replaced both with explicit `.sky-event-row` / `.transit-event-row` grids that re-flow ≤600px. Fixed `/docs`: **every operation was rendering as an empty shell in production** (no parameters, request body, or responses on all 18 endpoints) — the bundler elided apidom's side-effect refractor registration, so `OpenApi3_1Element.refract` was undefined and swagger-client's `resolveSubtree` threw; fixed by awaiting `import("@swagger-api/apidom-ns-openapi-3-1")` inside the existing `dynamic()`. Also fixed 2 dead `var(--text)` references. Verified by a deterministic 21-cell render check, green in dev and prod; 491/491 tests, lint + typecheck clean |
 | 2026-07-30 | Claude PM       | **v0.3.0 post-release contract audit** (audit-only, no code): verdict clean — all changes additive/backward-compatible; new response fields (`patterns`, `chartRuler` with nullable `placement`, `referenceLatitudeSource`) and optional inputs (`rulership`, `reference_latitude`) confirmed non-breaking; pattern orbs verified identical to natal aspect table; prod `/api/health` confirmed reporting 0.3.0; 491/491 tests, lint + typecheck clean; 2 low-priority OpenAPI doc gaps filed to TODO (synastry input $ref wrong, no response schemas) |
 | 2026-07-29 | Claude PM       | **v0.3.0 released to production**: aspect-pattern detection (7 pattern types, natal-style charts + sky snapshot), chart ruler (modern default / traditional flag, placement + aspects), composite `reference_latitude` — the three approved arsenal additions; 42 new tests (491 total); PR #9 → dev, release PR #10 → main (merge commits), live prod verification incl. the 5 Feb 1962 seven-planet Aquarius stellium |
 | 2026-07-29 | Claude PM       | **v0.2.0 released to production**: verified full transit-combo coverage (old 4,536-key manifest had excluded Sun/Moon/Mercury/Venus/Mars + South Node on the transit side — PR #7's 17,784-key manifest v2 is the corrected full arsenal, counts re-verified from generator + live endpoints), reviewed + merged PR #7 into dev, reconciled dev/main histories (July 18 release was squash-merged, forking main — resolved by merging main back into dev; use merge commits for release PRs from now on), released dev→main (PR #8, merge commit), Vercel production deploy verified with live smoke tests |
