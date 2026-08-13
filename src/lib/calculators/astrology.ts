@@ -216,12 +216,29 @@ function houseFor(longitude: number, cusps: number[]): number {
   return 1;
 }
 
+/**
+ * Pairs whose geometry is fixed by definition rather than observed, so an
+ * "aspect" between them carries no information. `south_node` is constructed as
+ * `true_node + 180`, which means every chart reported a 0.00° opposition — the
+ * tightest aspect present, always, on every chart ever calculated.
+ *
+ * Keyed by the sorted pair so lookup does not depend on iteration order.
+ * This suppresses the PAIR, not either point: the South Node still aspects
+ * everything else, and real oppositions between other bodies are untouched.
+ */
+const TAUTOLOGICAL_PAIRS = new Set(["south_node|true_node"]);
+
+function isTautologicalPair(a: string, b: string): boolean {
+  return TAUTOLOGICAL_PAIRS.has([a, b].sort().join("|"));
+}
+
 export function computeAspects(planets: NatalPlanet[]): Aspect[] {
   const out: Aspect[] = [];
   for (let i = 0; i < planets.length; i++) {
     for (let j = i + 1; j < planets.length; j++) {
       const a = planets[i];
       const b = planets[j];
+      if (isTautologicalPair(a.name, b.name)) continue;
       const sep = angularDifference(a.longitude, b.longitude);
       for (const def of ASPECT_DEFS) {
         const orb = Math.abs(sep - def.angle);

@@ -26,6 +26,7 @@ import { describe, it, expect } from "vitest";
 import {
   calculateNatalChart,
   calculateTransits,
+  computeAspects,
   ZODIAC_SIGNS,
   type NatalChart,
 } from "@/lib/calculators/astrology";
@@ -112,6 +113,21 @@ const NATAL_ORBS: Record<AspectType, number> = {
   quincunx: 3,
 };
 
+/**
+ * The order `computeAspects` tests candidates in, first match winning (§1.4).
+ * The windows provably do not overlap (§1.3), so this ordering never actually
+ * decides anything — but predicting the calculator means mirroring its rule,
+ * not a rule that happens to agree with it today.
+ */
+const NATAL_ORDER: AspectType[] = [
+  "conjunction",
+  "opposition",
+  "trine",
+  "square",
+  "sextile",
+  "quincunx",
+];
+
 describe("§1.1–1.2 the aspect set and natal orbs are the documented ones", () => {
   it("exactly six aspects, at the documented exact angles", () => {
     expect(ASPECT_ANGLES).toEqual({
@@ -146,6 +162,10 @@ describe("§1.1–1.2 the aspect set and natal orbs are the documented ones", ()
       const ps = chart.planets;
       for (let i = 0; i < ps.length; i++) {
         for (let j = i + 1; j < ps.length; j++) {
+          // The node/south-node pair is excluded by convention (§1.7): its
+          // geometry is an identity, not an observation. Every other pair is
+          // predicted from the orb table alone.
+          if ([ps[i].name, ps[j].name].sort().join("|") === "south_node|true_node") continue;
           pairs++;
           const sep = angularDifference(ps[i].longitude, ps[j].longitude);
           for (const type of Object.keys(ASPECT_ANGLES) as AspectType[]) {
@@ -306,17 +326,29 @@ describe("§1.5 reported orb is the true distance to exact", () => {
   });
 
   it("an exactly partile aspect reports applying: false (§1.5)", () => {
-    // The node/south-node pair is exact by construction on every chart, which
-    // makes it the one guaranteed partile aspect available to test the rule.
-    // (That it exists at all is F11.)
-    const withNode = CHARTS.filter(({ chart }) =>
-      chart.aspects.some((a) => a.from === "true_node" && a.to === "south_node"),
-    );
-    expect(withNode.length).toBeGreaterThan(0);
-    for (const { label, chart } of withNode) {
-      const nn = chart.aspects.find((a) => a.from === "true_node" && a.to === "south_node")!;
-      expect(nn.orb, label).toBeCloseTo(0, 9);
-      expect(nn.applying, `${label}: partile aspect must not claim to be applying`).toBe(false);
+    // This used to ride on the node/south-node pair, the one aspect guaranteed
+    // exact on every chart. F11 suppressed that pair, so no natural partile
+    // aspect remains — the rule is now exercised by driving `computeAspects`
+    // with a constructed pair instead, which is in any case a more direct test
+    // of it: `applying` is `|separation-after-a-step − exact| < orb`, and at
+    // orb 0 that comparison is false for every possible motion.
+    const template = calculateNatalChart(DIANA.birth).planets;
+    const sun = template.find((p) => p.name === "sun")!;
+    const mars = template.find((p) => p.name === "mars")!;
+
+    for (const [speedA, speedB] of [
+      [1, 0.5], // closing
+      [0.5, 1], // opening
+      [1, 1], // no relative motion
+    ]) {
+      const aspects = computeAspects([
+        { ...sun, longitude: 10, speed: speedA },
+        { ...mars, longitude: 130, speed: speedB },
+      ]);
+      const trine = aspects.find((a) => a.type === "trine");
+      expect(trine, `exact trine must be detected (speeds ${speedA}/${speedB})`).toBeDefined();
+      expect(trine!.orb).toBeCloseTo(0, 9);
+      expect(trine!.applying, "a partile aspect must not claim to be applying").toBe(false);
     }
   });
 });
@@ -692,27 +724,86 @@ describe("§8 findings (characterization — rewrite on disposition)", () => {
     expect(overlay.aspects.filter((a) => a.applying).length).toBeGreaterThan(0);
   });
 
-  // F11 — the node/south-node opposition is an identity, not a configuration.
-  // DISPOSITION: exclude the pair. When that lands, rewrite to assert absence
-  // (and move the partile-aspect test in §1.5 onto another exact pair).
-  it("F11: every chart with the node carries a tautological 0.00° node opposition", () => {
-    let found = 0;
+  // F11 — FIXED. The node/south-node opposition is an identity, not a
+  // configuration, and is no longer reported. These tests replace the
+  // characterization pair that pinned the defect.
+  //
+  // The danger in this fix is over-suppression: dropping the South Node from
+  // the aspect list entirely, or filtering every 0.00° aspect, would also make
+  // the first test below pass. The second and third exist to catch that.
+  it("F11: the tautological node opposition is not reported", () => {
+    let checked = 0;
     for (const { label, chart } of CHARTS) {
-      if (!chart.planets.some((p) => p.name === "south_node")) continue;
+      const lon = new Map(chart.planets.map((p) => [p.name, p.longitude]));
+      if (!lon.has("true_node") || !lon.has("south_node")) continue;
+
+      // Non-vacuousness: the pair really is at an exact opposition, so there IS
+      // something being suppressed. Without this, the test would pass on a
+      // chart where the pair simply never aspected.
+      const sep = angularDifference(lon.get("true_node")!, lon.get("south_node")!);
+      expect(sep, `${label}: the nodes must be 180° apart by construction`).toBeCloseTo(180, 9);
+
       const nn = chart.aspects.find(
         (a) =>
           (a.from === "true_node" && a.to === "south_node") ||
           (a.from === "south_node" && a.to === "true_node"),
       );
-      expect(nn, `${label}: expected the tautological node opposition`).toBeDefined();
-      expect(nn!.type).toBe("opposition");
-      expect(nn!.orb, label).toBeCloseTo(0, 9);
-      // ...and it is the tightest aspect in the chart, always.
-      const tightest = Math.min(...chart.aspects.map((a) => a.orb));
-      expect(nn!.orb, `${label}: node opposition should be the tightest`).toBeCloseTo(tightest, 9);
-      found++;
+      expect(nn, `${label}: node-node aspect must be suppressed`).toBeUndefined();
+      checked++;
     }
-    expect(found).toBeGreaterThan(10);
+    expect(checked).toBeGreaterThan(10);
+  });
+
+  it("F11: suppression is specific — every other in-orb opposition survives", () => {
+    // Behavioural equivalence restricted to oppositions: predict the full set
+    // from geometry, subtract only the node pair, and require an exact match.
+    // Suppressing anything else — all node aspects, all exact aspects, all
+    // oppositions — fails here.
+    let predicted = 0;
+    for (const { label, chart } of CHARTS) {
+      const pts = chart.planets.map((p) => ({ name: p.name, longitude: p.longitude }));
+      const expected = new Set<string>();
+      for (let i = 0; i < pts.length; i++) {
+        for (let j = i + 1; j < pts.length; j++) {
+          const a = pts[i];
+          const b = pts[j];
+          const pair = [a.name, b.name].sort().join("|");
+          if (pair === ["true_node", "south_node"].sort().join("|")) continue;
+          const sep = angularDifference(a.longitude, b.longitude);
+          // One aspect per pair, first match wins (§1.4) — so an opposition is
+          // only reported if no tighter-listed aspect claimed the pair first.
+          const claimed = NATAL_ORDER.find(
+            (t) => Math.abs(sep - ASPECT_ANGLES[t]) <= NATAL_ORBS[t],
+          );
+          if (claimed === "opposition") expected.add(pair);
+        }
+      }
+      const actual = new Set(
+        chart.aspects
+          .filter((a) => a.type === "opposition")
+          .map((a) => [a.from, a.to].sort().join("|")),
+      );
+      expect([...actual].sort(), `${label}: opposition set`).toEqual([...expected].sort());
+      predicted += expected.size;
+    }
+    expect(predicted, "non-vacuous: real oppositions must exist across the set").toBeGreaterThan(20);
+  });
+
+  it("F11: the South Node still aspects other bodies", () => {
+    // The narrow fix excludes one PAIR. Excluding the POINT would be a
+    // different, larger change to §1.6 participation, and is not what landed.
+    let charts = 0;
+    for (const { label, chart } of CHARTS) {
+      if (!chart.planets.some((p) => p.name === "south_node")) continue;
+      const others = chart.aspects.filter(
+        (a) =>
+          (a.from === "south_node" && a.to !== "true_node") ||
+          (a.to === "south_node" && a.from !== "true_node"),
+      );
+      expect(others.length, `${label}: south_node must still participate`).toBeGreaterThan(0);
+      charts++;
+    }
+    expect(charts).toBeGreaterThan(10);
   });
 });
 
