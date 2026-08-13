@@ -6,12 +6,21 @@ import {
   calcHouses,
   calcPlanet,
   julianDayUT,
+  julianDayUTResolved,
   type HouseSystem,
   type PlanetName,
+  summarizeEphemeris,
+  type EphemerisSource,
   type PlanetPosition,
 } from "../ephemeris/client";
 import type { BirthData } from "../types/birth-data";
 import { detectAspectPatterns, type AspectPattern, type PatternPoint } from "./aspect-patterns";
+import {
+  DEFAULT_TRANSIT_ORBS,
+  MOTION_SAMPLE_DAYS,
+  STATIONARY_REL_SPEED_DEG_PER_DAY,
+  type AspectType,
+} from "../constants/orbs";
 import {
   MODERN_RULERS,
   TRADITIONAL_RULERS,
@@ -71,7 +80,16 @@ export interface NatalChart {
   jd_ut: number;
   planets: NatalPlanet[];
   houses: {
+    /**
+     * The house system that actually produced these cusps. Above the polar
+     * circle Placidus and Koch are undefined and the ephemeris substitutes
+     * Porphyry; this field reports the substitute, because reporting the
+     * request would be a false label on exact cusps of a different system.
+     * See finding F5.
+     */
     system: HouseSystem;
+    /** Present only when a substitution happened — then this is what was asked for. */
+    requestedSystem?: HouseSystem;
     cusps: { house: number; longitude: number; sign: SignPosition }[];
     ascendant: { longitude: number; sign: SignPosition };
     midheaven: { longitude: number; sign: SignPosition };
@@ -81,9 +99,17 @@ export interface NatalChart {
    * Part of Fortune (Pars Fortunae) — derived point representing material
    * well-being and "the place where you find your joy". Day-birth formula:
    * ASC + Moon - Sun. Night-birth formula: ASC + Sun - Moon (reversed).
-   * `isDayBirth` tells you which formula was used.
+   * `isDayBirth` tells you which formula was used, and is determined by the
+   * Sun's position relative to the horizon — not by its house number, so it
+   * does not vary with `house_system`.
+   *
+   * **Optional.** The formula requires both luminaries, so the field is
+   * OMITTED (the key is absent from the JSON) when the caller's `planets`
+   * subset excludes the Sun or the Moon. It previously fell back to the
+   * Ascendant's longitude with `isDayBirth: false`, which was indistinguishable
+   * from a real Part of Fortune conjunct the Ascendant. See finding F8.
    */
-  partOfFortune: {
+  partOfFortune?: {
     longitude: number;
     sign: SignPosition;
     house: number;
@@ -99,6 +125,23 @@ export interface NatalChart {
    * pass `rulership: "traditional"` for the classical table.
    */
   chartRuler: ChartRuler;
+  /**
+   * Which ephemeris answered for this chart's positions — `"swiss"` for the
+   * 1800–2399 range this deployment ships data files for, `"moshier"` for
+   * instants outside it, where sweph falls back to its built-in analytic theory
+   * at roughly arcsecond rather than milliarcsecond accuracy.
+   *
+   * Reported on every chart, not only the fallback ones, so a consumer never
+   * has to infer precision from the date. See finding F1.
+   */
+  ephemeris: EphemerisSource | "mixed";
+  /**
+   * Bodies the caller asked for that have no ephemeris at this instant, with
+   * sweph's reason. Present only when non-empty. Chiron before 1800 is the
+   * real-world case: sweph refuses it outright, so it is reported here rather
+   * than silently dropped or given a fabricated position (finding F2).
+   */
+  unavailableBodies?: { name: PlanetName; longitude: null; reason: string }[];
   /** Non-fatal warnings about the chart (e.g., high-latitude house distortion). */
   warnings: string[];
 }
@@ -180,13 +223,31 @@ const HIGH_LATITUDE_THRESHOLD = 66.5;
 
 export type AspectBody = PlanetName | "south_node";
 
+/**
+ * Which way an aspect is going, from the two bodies' relative motion.
+ *
+ * `"stationary"` means the bodies are not moving with respect to each other to
+ * within `STATIONARY_REL_SPEED_DEG_PER_DAY` — the aspect is doing neither thing,
+ * and saying "separating" would be a claim rather than an observation. See F10.
+ */
+export type AspectMotion = "applying" | "separating" | "stationary";
+
 export interface Aspect {
   from: AspectBody;
   to: AspectBody;
   type: "conjunction" | "opposition" | "trine" | "square" | "sextile" | "quincunx";
   exactAngle: number;
   orb: number;
-  applying: boolean;
+  /**
+   * True while the orb is tightening toward exact.
+   *
+   * **Optional.** Omitted (key absent) when `motion` is `"stationary"`, because
+   * a two-valued field cannot express a third answer and `false` there would
+   * read as "separating". Present whenever the direction is determinate.
+   */
+  applying?: boolean;
+  /** The three-valued form; always present. */
+  motion: AspectMotion;
 }
 
 const ASPECT_DEFS: { type: Aspect["type"]; angle: number; orb: number }[] = [
@@ -203,16 +264,205 @@ function angularDifference(a: number, b: number): number {
   return d;
 }
 
-function houseFor(longitude: number, cusps: number[]): number {
-  // cusps[i] is the start of house i+1. Houses wrap around 360°.
+/**
+ * Direction of an aspect, from the RELATIVE motion of the two bodies.
+ *
+ * Sampled ~15 minutes ahead along both bodies' longitude speeds: if the
+ * separation is closer to exact then, the aspect is applying. When the two
+ * speeds differ by less than `STATIONARY_REL_SPEED_DEG_PER_DAY` the pair is not
+ * moving with respect to each other in any meaningful sense and the answer is
+ * `"stationary"` — a transiting body at its station, or two outer bodies
+ * momentarily locked in step, is doing neither thing.
+ *
+ * For transit-to-natal work the natal chart is a fixed moment, so the natal
+ * body's speed is 0 and the relative motion is the transiting body's own —
+ * which is exactly what makes a transiting station come out as `"stationary"`.
+ *
+ * A partile aspect (orb 0) with the bodies still moving comes out as
+ * `"separating"`: the next instant genuinely is wider. See §1.5.
+ *
+ * @returns The direction, or `"stationary"` when there is no meaningful one.
+ */
+export function aspectMotion(
+  longitudeA: number,
+  speedA: number,
+  longitudeB: number,
+  speedB: number,
+  exactAngle: number,
+  orb: number,
+): AspectMotion {
+  if (Math.abs(speedA - speedB) < STATIONARY_REL_SPEED_DEG_PER_DAY) return "stationary";
+  const sepFuture = angularDifference(
+    longitudeA + speedA * MOTION_SAMPLE_DAYS,
+    longitudeB + speedB * MOTION_SAMPLE_DAYS,
+  );
+  return Math.abs(sepFuture - exactAngle) < orb ? "applying" : "separating";
+}
+
+/**
+ * The `applying`/`motion` pair for an aspect payload, spread into the object.
+ *
+ * Spread rather than assigned so that a stationary aspect leaves `applying`
+ * genuinely ABSENT rather than present-and-undefined (the same distinction the
+ * Part of Fortune turns on — see F8).
+ */
+function motionFields(motion: AspectMotion): { applying?: boolean; motion: AspectMotion } {
+  return motion === "stationary"
+    ? { motion }
+    : { applying: motion === "applying", motion };
+}
+
+/**
+ * The signed extent of each of the twelve houses, in degrees.
+ *
+ * For an ordinary chart this is just `cusps[i+1] − cusps[i]` taken forward
+ * around the circle, and the twelve add up to exactly 360.
+ *
+ * Above the polar circle they do not. Campanus and Regiomontanus cusps collapse
+ * onto two points 180° apart, and the wheel becomes locally *retrograde*: cusp
+ * i+1 sits a hundredth of a degree BEHIND cusp i. Read forward, that hair-thin
+ * house measures 359.97° instead of 0.03°, and the naive twelve then sum to
+ * 360 × k for k up to 11. Measured at 69.65°N, ARMC 239°, Campanus:
+ *
+ *   cusps  60.95 | 241.24  241.16  241.13  241.11  241.09 | 240.95 | 61.24 …
+ *   naive  180.28  359.92  359.98  359.98  359.97  359.87   180.28  359.92 …
+ *   sum    3960 = 360 × 11
+ *
+ * Ten of those twelve arcs are spurious. Exactly which ten is fixed by
+ * arithmetic — the sum overshoots by 360 × (k−1), so k−1 arcs must be the
+ * negative representative — and *which* ten is fixed by physics: the spurious
+ * ones are the arcs nearest 360°, i.e. the ones that are really tiny negatives.
+ * Flipping the largest k−1 turns them into −0.08, −0.03, −0.02, −0.03, −0.13 …
+ * and the total falls back to exactly 360.
+ *
+ * Flipping largest-first rather than blindly normalising into (−180, 180] also
+ * keeps genuinely oversized houses intact: the two real houses above measure
+ * 180.28° each, and a (−180, 180] normalisation would wrongly zero both.
+ */
+/** One house as an arc: where it starts, and how far it runs counterclockwise. */
+export interface HouseSpan {
+  start: number;
+  extent: number;
+}
+
+/**
+ * The twelve houses as arcs of the zodiac (finding F6).
+ *
+ * A house is the arc between its own cusp and the next one, but *which* of the
+ * two arcs between them is not always the forward one. Above the polar circles
+ * the house wheel runs **backwards**: cusp 2 sits clockwise of cusp 1, cusp 3
+ * clockwise of cusp 2, and so on all the way round. Measured forward, eleven of
+ * the twelve arcs then come out just under 360° instead of just over 0°, house
+ * 1 alone claims the whole zodiac, and every body in the chart is reported
+ * inside it — which is exactly what this function exists to prevent.
+ *
+ * Direction is not guessed, it is measured. A wheel's twelve arcs must close
+ * the circle exactly once, so the direction whose arcs sum to 360° is the real
+ * one. Swept across a full sidereal day at seven latitudes and seven house
+ * systems, every one of 4186 degenerate instants summed to 360×11 forward and
+ * to exactly 360 backward — the wheel is reversed, not broken, and the cusps
+ * themselves are correct to within 1e-10 arcsec.
+ */
+export function wheelDirection(cusps: number[]): "direct" | "reversed" {
+  return houseSpans(cusps)[0].start === cusps[0] ? "direct" : "reversed";
+}
+
+export function houseSpans(cusps: number[]): HouseSpan[] {
+  const forward = cusps.map((start, i) => ({
+    start,
+    extent: (((cusps[(i + 1) % 12] - start) % 360) + 360) % 360,
+  }));
+  const closes = (spans: HouseSpan[]) =>
+    Math.abs(spans.reduce((a, s) => a + s.extent, 0) - 360) < 1e-6;
+  if (closes(forward)) return forward;
+
+  // Retrograde wheel: house i runs from the *next* cusp forward to its own.
+  const backward = cusps.map((end, i) => {
+    const start = cusps[(i + 1) % 12];
+    return { start, extent: (((end - start) % 360) + 360) % 360 };
+  });
+  // If neither direction closes the circle the cusps are not a wheel at all;
+  // forward is the conventional reading and still beats throwing a chart away.
+  return closes(backward) ? backward : forward;
+}
+
+/**
+ * Which house a longitude falls in.
+ *
+ * Membership is `offset < extent`, both measured counterclockwise from the
+ * house's own start — never a comparison of raw cusp values, which assumes the
+ * cusps ascend and so mis-reads every reversed polar wheel (finding F6).
+ */
+export function houseFor(longitude: number, cusps: number[]): number {
   const norm = ((longitude % 360) + 360) % 360;
+  const spans = houseSpans(cusps);
   for (let i = 0; i < 12; i++) {
-    const start = cusps[i];
-    const end = cusps[(i + 1) % 12];
-    const inHouse = end > start ? norm >= start && norm < end : norm >= start || norm < end;
-    if (inHouse) return i + 1;
+    if (spans[i].extent <= 0) continue;
+    const offset = (((norm - spans[i].start) % 360) + 360) % 360;
+    if (offset < spans[i].extent) return i + 1;
   }
   return 1;
+}
+
+/**
+ * Sect: is the Sun above the horizon?
+ *
+ * The horizon is the ASC–DSC axis, so the above-horizon hemisphere is the arc
+ * running *backwards* from the Ascendant through 180° to the Descendant. A body
+ * is above it when `(asc − longitude) mod 360 < 180`.
+ *
+ * This deliberately does NOT go through the Sun's house number. Houses 7–12
+ * coincide with that arc only when cusp 1 is the ASC and cusp 7 the DSC, which
+ * is false under `whole_sign` — house 1 there begins at the start of the
+ * Ascendant's *sign*. Reading sect off the house number therefore made the Part
+ * of Fortune depend on the caller's `house_system`, moving it by up to ~135°
+ * for a late-degree Ascendant. Sect is a property of the sky and must be
+ * invariant under the choice of wheel. See `docs/aspect-conventions.md` §4.2
+ * and finding F7.
+ *
+ * A body exactly on the Ascendant counts as above (rising); one exactly on the
+ * Descendant counts as below (setting).
+ */
+export function isAboveHorizon(longitude: number, ascendant: number): boolean {
+  return ((((ascendant - longitude) % 360) + 360) % 360) < 180;
+}
+
+/**
+ * Part of Fortune: day-birth = ASC + Moon − Sun; night-birth = ASC + Sun − Moon.
+ * Shared by the natal and composite charts so the two cannot drift apart.
+ */
+export function computePartOfFortune(
+  ascendant: number,
+  sunLongitude: number,
+  moonLongitude: number,
+  cusps: number[]
+): { longitude: number; sign: SignPosition; house: number; isDayBirth: boolean } {
+  const isDayBirth = isAboveHorizon(sunLongitude, ascendant);
+  const lon = isDayBirth
+    ? (((ascendant + moonLongitude - sunLongitude) % 360) + 360) % 360
+    : (((ascendant + sunLongitude - moonLongitude) % 360) + 360) % 360;
+  return {
+    longitude: lon,
+    sign: longitudeToSign(lon),
+    house: houseFor(lon, cusps),
+    isDayBirth,
+  };
+}
+
+/**
+ * Pairs whose geometry is fixed by definition rather than observed, so an
+ * "aspect" between them carries no information. `south_node` is constructed as
+ * `true_node + 180`, which means every chart reported a 0.00° opposition — the
+ * tightest aspect present, always, on every chart ever calculated.
+ *
+ * Keyed by the sorted pair so lookup does not depend on iteration order.
+ * This suppresses the PAIR, not either point: the South Node still aspects
+ * everything else, and real oppositions between other bodies are untouched.
+ */
+const TAUTOLOGICAL_PAIRS = new Set(["south_node|true_node"]);
+
+function isTautologicalPair(a: string, b: string): boolean {
+  return TAUTOLOGICAL_PAIRS.has([a, b].sort().join("|"));
 }
 
 export function computeAspects(planets: NatalPlanet[]): Aspect[] {
@@ -221,23 +471,20 @@ export function computeAspects(planets: NatalPlanet[]): Aspect[] {
     for (let j = i + 1; j < planets.length; j++) {
       const a = planets[i];
       const b = planets[j];
+      if (isTautologicalPair(a.name, b.name)) continue;
       const sep = angularDifference(a.longitude, b.longitude);
       for (const def of ASPECT_DEFS) {
         const orb = Math.abs(sep - def.angle);
         if (orb <= def.orb) {
-          // Applying = orbit will tighten toward exact aspect over the next ~15 minutes.
-          const sepFuture = angularDifference(
-            a.longitude + a.speed * 0.01,
-            b.longitude + b.speed * 0.01
-          );
-          const applying = Math.abs(sepFuture - def.angle) < orb;
           out.push({
             from: a.name,
             to: b.name,
             type: def.type,
             exactAngle: def.angle,
             orb,
-            applying,
+            ...motionFields(
+              aspectMotion(a.longitude, a.speed, b.longitude, b.speed, def.angle, orb),
+            ),
           });
           break;
         }
@@ -282,20 +529,76 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
   const houseSystem = input.house_system ?? "placidus";
   const planetList = input.planets ?? DEFAULT_PLANETS;
 
-  const jd = julianDayUT(input.datetime, input.timezone);
-  const positions = calcAllPlanets(jd, planetList);
+  const { jd, kind: timeKind } = julianDayUTResolved(input.datetime, input.timezone);
+  const { positions, unavailable } = calcAllPlanets(jd, planetList);
   const houses = calcHouses(jd, input.latitude, input.longitude, houseSystem);
 
   const warnings: string[] = [];
-  if (Math.abs(input.latitude) >= HIGH_LATITUDE_THRESHOLD && QUADRANT_SYSTEMS.has(houseSystem)) {
+  if (timeKind === "gap") {
     warnings.push(
-      `Latitude ${input.latitude.toFixed(2)}° is at or beyond the polar circle; ` +
-      `${houseSystem} house cusps are mathematically degenerate above ~66.5° and ` +
-      `may be unreliable. Consider whole_sign or equal house systems for polar charts.`
+      `Local time ${input.datetime} does not exist in ${input.timezone}: it falls inside ` +
+      `an hour skipped by a daylight-saving transition. The chart was cast one hour ` +
+      `later, past the gap. Verify the recorded birth time.`
+    );
+  } else if (timeKind === "ambiguous") {
+    warnings.push(
+      `Local time ${input.datetime} occurs twice in ${input.timezone} because of a ` +
+      `daylight-saving transition. The chart was cast for the FIRST occurrence ` +
+      `(daylight time); the second is one hour later and gives a different chart.`
+    );
+  }
+  // Driven by sweph's return flag, not by a latitude constant. The substitution
+  // boundary is not 66.5° and is not even fixed: it tracks the obliquity of the
+  // ecliptic, measured at 66.5327° in 1800, 66.5623° in 2000 and 66.5774° in
+  // 2333. A hardcoded 66.5 warned on charts sweph computes real Placidus cusps
+  // for, and would drift further wrong with every century. See finding F5.
+  if (houses.system !== houses.requestedSystem) {
+    warnings.push(
+      `Latitude ${input.latitude.toFixed(2)}° is beyond the polar circle, where ` +
+      `${houses.requestedSystem} house cusps are undefined. These are ` +
+      `${houses.system} cusps, which is what the ephemeris substituted — they are ` +
+      `exact for that system, not unreliable ${houses.requestedSystem} ones. ` +
+      `Consider whole_sign or equal house systems for polar charts.`
+    );
+  } else if (Math.abs(input.latitude) >= HIGH_LATITUDE_THRESHOLD && QUADRANT_SYSTEMS.has(houseSystem)) {
+    warnings.push(
+      `Latitude ${input.latitude.toFixed(2)}° is at or beyond the polar circle. ` +
+      `${houseSystem} cusps are still defined here, but houses become extremely ` +
+      `unequal and some may collapse to near-zero width. Consider whole_sign or ` +
+      `equal house systems for polar charts.`
     );
   }
 
-  const planets: NatalPlanet[] = planetList.map((name) => {
+  // A reversed wheel is not an error, but it IS surprising: the house numbers
+  // run clockwise, so house 1 ends at the Ascendant instead of beginning there
+  // and a body a temperate chart would place in house 5 lands near house 9.
+  // Saying so costs a sentence; leaving the caller to discover it from the
+  // numbers is the same kind of silence F5 was about. See finding F6.
+  if (wheelDirection(houses.cusps) === "reversed") {
+    warnings.push(
+      `At latitude ${input.latitude.toFixed(2)}° the ecliptic lies close to the plane ` +
+      `of the horizon at this moment, so the ${houses.system} house wheel runs ` +
+      `backwards: cusps descend rather than ascend, ten of the twelve houses are ` +
+      `hairline-narrow, and two span roughly 180° each. The cusps are exact and every ` +
+      `body is placed in the house that genuinely contains it, but house numbers here ` +
+      `are not comparable with those from a temperate chart. Consider whole_sign or ` +
+      `equal, which stay ordered at every latitude.`
+    );
+  }
+
+  // Bodies sweph refused are reported, not fabricated and not silently
+  // dropped: the caller asked for them, so silence would be indistinguishable
+  // from "not requested" (the same reasoning that made F8 an omission — there
+  // absence WAS the honest answer; here the request itself is the context).
+  if (unavailable.length > 0) {
+    warnings.push(
+      `No ephemeris for ${unavailable.map((u) => u.name).join(", ")} at this date; ` +
+      `reported in unavailableBodies with a null longitude rather than omitted.`
+    );
+  }
+  const availableList = planetList.filter((n) => positions[n] != null);
+
+  const planets: NatalPlanet[] = availableList.map((name) => {
     const p: PlanetPosition = positions[name];
     return {
       name,
@@ -324,31 +627,20 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
     });
   }
 
-  // Part of Fortune: day-birth = ASC + Moon - Sun; night-birth = ASC + Sun - Moon.
-  // Day birth ≡ Sun above horizon ≡ Sun's house ∈ {7..12} under conventional
-  // house counting (1 starts at ASC, descending eastern horizon).
+  // Part of Fortune. Omitted entirely when either luminary is absent from the
+  // requested `planets` subset — the formula needs both, and the Ascendant is
+  // not a stand-in for a value we cannot compute (see `partOfFortune` above).
   const sunPlanet = planets.find((p) => p.name === "sun");
   const moonPlanet = planets.find((p) => p.name === "moon");
-  let partOfFortune;
-  if (sunPlanet && moonPlanet) {
-    const isDayBirth = sunPlanet.house >= 7 && sunPlanet.house <= 12;
-    const pofLon = isDayBirth
-      ? ((houses.ascendant + moonPlanet.longitude - sunPlanet.longitude) % 360 + 360) % 360
-      : ((houses.ascendant + sunPlanet.longitude - moonPlanet.longitude) % 360 + 360) % 360;
-    partOfFortune = {
-      longitude: pofLon,
-      sign: longitudeToSign(pofLon),
-      house: houseFor(pofLon, houses.cusps),
-      isDayBirth,
-    };
-  } else {
-    partOfFortune = {
-      longitude: houses.ascendant,
-      sign: longitudeToSign(houses.ascendant),
-      house: 1,
-      isDayBirth: false,
-    };
-  }
+  const partOfFortune =
+    sunPlanet && moonPlanet
+      ? computePartOfFortune(
+          houses.ascendant,
+          sunPlanet.longitude,
+          moonPlanet.longitude,
+          houses.cusps,
+        )
+      : undefined;
 
   const aspects = computeAspects(planets);
   const ascendantSign = longitudeToSign(houses.ascendant).sign;
@@ -357,7 +649,12 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
     jd_ut: jd,
     planets,
     houses: {
-      system: houseSystem,
+      // The system that produced these cusps, which above the polar circle is
+      // not always the one requested (F5).
+      system: houses.system,
+      ...(houses.system !== houses.requestedSystem
+        ? { requestedSystem: houses.requestedSystem }
+        : {}),
       cusps: houses.cusps.map((cusp, i) => ({
         house: i + 1,
         longitude: cusp,
@@ -367,10 +664,24 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
       midheaven: { longitude: houses.midheaven, sign: longitudeToSign(houses.midheaven) },
       vertex: { longitude: houses.vertex, sign: longitudeToSign(houses.vertex) },
     },
-    partOfFortune,
+    // Spread rather than assign, so an omitted Part of Fortune leaves the key
+    // genuinely ABSENT rather than present-and-undefined. JSON.stringify drops
+    // undefined either way, but a JS consumer doing `"partOfFortune" in chart`
+    // would otherwise see a field that is not there (F8).
+    ...(partOfFortune ? { partOfFortune } : {}),
     aspects,
     patterns: detectAspectPatterns(patternPointsFromPlanets(planets)),
     chartRuler: computeChartRuler(ascendantSign, planets, aspects, input.rulership),
+    ephemeris: summarizeEphemeris(positions) ?? "swiss",
+    ...(unavailable.length > 0
+      ? {
+          unavailableBodies: unavailable.map((u) => ({
+            name: u.name,
+            longitude: null as null,
+            reason: u.reason,
+          })),
+        }
+      : {}),
     warnings,
   };
 }
@@ -380,12 +691,24 @@ export interface TransitInput {
   transit_datetime: string; // local ISO at the natal location, or UTC
   transit_timezone: string;
   planets?: PlanetName[];
+  /**
+   * Per-aspect orb overrides, merged over `DEFAULT_TRANSIT_ORBS`. Structurally
+   * identical to `OverlayOptions["orbs"]`, which the transit/natal and synastry
+   * paths take — spelled out rather than imported because `overlay.ts` imports
+   * this module and the reverse import would close the cycle that orb table
+   * lived in before F9.
+   */
+  orbs?: Partial<Record<AspectType, number>>;
 }
 
 export interface TransitChart {
   natal_jd_ut: number;
   transit_jd_ut: number;
   transitingPlanets: NatalPlanet[];
+  /** Which ephemeris answered for the TRANSIT positions (F1). */
+  transitEphemeris: EphemerisSource | "mixed";
+  /** Requested transiting bodies with no ephemeris at that instant (F2). */
+  unavailableTransitBodies?: { name: PlanetName; longitude: null; reason: string }[];
   aspectsToNatal: (Aspect & { fromTransit: boolean })[];
 }
 
@@ -400,16 +723,23 @@ export interface TransitChart {
  * @param input.transit_datetime   ISO 8601 local datetime of the transit moment.
  * @param input.transit_timezone   IANA timezone of `transit_datetime`.
  * @param input.planets            Optional subset of bodies to include.
+ * @param input.orbs               Optional per-aspect orb overrides, merged OVER
+ *   `DEFAULT_TRANSIT_ORBS` — an unlisted aspect keeps its default rather than
+ *   being dropped. Same contract as `/api/v1/transit/natal` and
+ *   `/api/v1/synastry`, which is the point: the override must not become a
+ *   third way to make the two transit paths disagree (cf. F9).
  * @returns Both Julian Days, the transit planet positions in natal houses,
  *   and the transit-to-natal aspect list.
  */
 export function calculateTransits(input: TransitInput): TransitChart {
   const natalChart = calculateNatalChart(input.natal);
   const transitJd = julianDayUT(input.transit_datetime, input.transit_timezone);
+  const orbs = { ...DEFAULT_TRANSIT_ORBS, ...input.orbs };
   const planetList = input.planets ?? DEFAULT_PLANETS;
-  const tpos = calcAllPlanets(transitJd, planetList);
+  const { positions: tpos, unavailable: tUnavailable } = calcAllPlanets(transitJd, planetList);
+  const transitList = planetList.filter((n) => tpos[n] != null);
 
-  const transitingPlanets: NatalPlanet[] = planetList.map((name) => {
+  const transitingPlanets: NatalPlanet[] = transitList.map((name) => {
     const p = tpos[name];
     return {
       name,
@@ -427,15 +757,29 @@ export function calculateTransits(input: TransitInput): TransitChart {
     for (const n of natalChart.planets) {
       const sep = angularDifference(t.longitude, n.longitude);
       for (const def of ASPECT_DEFS) {
+        // TRANSIT orbs, not the natal table this loop used to read off
+        // `ASPECT_DEFS`. Which orbs a transit is judged by is a property of the
+        // question, not of the URL the caller happened to reach for: this
+        // endpoint and `/api/v1/transit/natal` answer the same question and
+        // must answer it the same way (F9) — including when the caller supplies
+        // the table.
         const orb = Math.abs(sep - def.angle);
-        if (orb <= def.orb) {
+        if (orb <= orbs[def.type]) {
           aspectsToNatal.push({
             from: t.name,
             to: n.name,
             type: def.type,
             exactAngle: def.angle,
             orb,
-            applying: false,
+            // Computed from relative motion, where this used to be a hardcoded
+            // `applying: false` on every hit — a wrong answer on roughly half
+            // the list, and the half that matters, since an applying transit is
+            // the one that has not yet peaked (F10). The natal chart is a fixed
+            // moment, so the natal body's speed is 0 and the relative motion is
+            // the transiting body's own.
+            ...motionFields(
+              aspectMotion(t.longitude, t.speed, n.longitude, 0, def.angle, orb),
+            ),
             fromTransit: true,
           });
           break;
@@ -448,6 +792,15 @@ export function calculateTransits(input: TransitInput): TransitChart {
     natal_jd_ut: natalChart.jd_ut,
     transit_jd_ut: transitJd,
     transitingPlanets,
+    transitEphemeris: summarizeEphemeris(tpos) ?? "swiss",
+    ...(tUnavailable.length > 0
+      ? {
+          unavailableTransitBodies: tUnavailable.map((u) => ({
+            ...u,
+            longitude: null as null,
+          })),
+        }
+      : {}),
     aspectsToNatal,
   };
 }
@@ -468,6 +821,10 @@ export interface ProgressedChart {
   progressed_jd_ut: number;
   years: number;
   planets: { name: PlanetName; longitude: number; sign: SignPosition; retrograde: boolean }[];
+  /** Which ephemeris answered at the progressed instant (F1). */
+  ephemeris: EphemerisSource | "mixed";
+  /** Requested bodies with no ephemeris at the progressed instant (F2). */
+  unavailableBodies?: { name: PlanetName; longitude: null; reason: string }[];
 }
 
 const DEFAULT_PROGRESSED_PLANETS: readonly PlanetName[] = [
@@ -490,9 +847,10 @@ export function calculateProgressions(input: ProgressedInput): ProgressedChart {
   const natalJd = julianDayUT(input.datetime, input.timezone);
   const progressedJd = natalJd + input.years;
   const planetList = input.planets ?? DEFAULT_PROGRESSED_PLANETS;
-  const positions = calcAllPlanets(progressedJd, planetList);
+  const { positions, unavailable } = calcAllPlanets(progressedJd, planetList);
+  const availableList = planetList.filter((n) => positions[n] != null);
 
-  const planets = planetList.map((name) => {
+  const planets = availableList.map((name) => {
     const p = positions[name];
     return {
       name,
@@ -507,6 +865,10 @@ export function calculateProgressions(input: ProgressedInput): ProgressedChart {
     progressed_jd_ut: progressedJd,
     years: input.years,
     planets,
+    ephemeris: summarizeEphemeris(positions) ?? "swiss",
+    ...(unavailable.length > 0
+      ? { unavailableBodies: unavailable.map((u) => ({ ...u, longitude: null as null })) }
+      : {}),
   };
 }
 

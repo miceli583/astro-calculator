@@ -1,0 +1,122 @@
+{
+  "id": "mandela-1918-mvezo",
+  "why": "southern hemisphere, pre-1970, established reference chart",
+  "input": {
+    "datetime": "1918-07-18T14:00:00",
+    "timezone": "Africa/Johannesburg",
+    "latitude": -31.9,
+    "longitude": 28.65
+  },
+  "resolved": {
+    "offsetMinutes": 120,
+    "kind": "unique",
+    "utc": {
+      "year": 1918,
+      "month": 7,
+      "day": 18,
+      "hour": 12,
+      "minute": 0,
+      "second": 0
+    }
+  },
+  "jd": {
+    "tt": 2421793.000239033,
+    "ut": 2421793
+  },
+  "source": {
+    "api": "https://ssd.jpl.nasa.gov/api/horizons.api",
+    "harvestedAt": "2026-08-12",
+    "center": "500@399 (geocentric)",
+    "j2000": "EPHEM_TYPE=VECTORS, REF_PLANE=ECLIPTIC, REF_SYSTEM=ICRF, VEC_CORR=LT+S, epoch=JD(TT) as TDB",
+    "ofDate": "EPHEM_TYPE=OBSERVER, QUANTITIES=31 (ObsEcLon/ObsEcLat, true ecliptic and equinox of date), TIME_TYPE=TT",
+    "node": "EPHEM_TYPE=ELEMENTS, OM = osculating ascending node, J2000 ecliptic"
+  },
+  "j2000Ecliptic": {
+    "sun": {
+      "lon": 116.16775102748056,
+      "lat": 0.009005454417356834,
+      "distanceAu": 1.0162165395710119
+    },
+    "moon": {
+      "lon": 230.92877760486502,
+      "lat": -2.7786254353115605,
+      "distanceAu": 0.00265642452370731
+    },
+    "mercury": {
+      "lon": 137.2057940820223,
+      "lat": 1.2651048748638147,
+      "distanceAu": 1.1453812666857603
+    },
+    "venus": {
+      "lon": 83.66765596931623,
+      "lat": -1.2345546299298786,
+      "distanceAu": 1.3317237460280673
+    },
+    "mars": {
+      "lon": 193.69033712860255,
+      "lat": -0.13649746539613,
+      "distanceAu": 1.3971849902775801
+    },
+    "jupiter": {
+      "lon": 92.29204376423706,
+      "lat": -0.24011493867947262,
+      "distanceAu": 6.032871513887032
+    },
+    "saturn": {
+      "lon": 136.16067957518567,
+      "lat": 0.9323697786512501,
+      "distanceAu": 10.11067128288098
+    },
+    "uranus": {
+      "lon": 328.0614754032854,
+      "lat": -0.7718250621729161,
+      "distanceAu": 19.136037218464857
+    },
+    "neptune": {
+      "lon": 127.50818475833381,
+      "lat": -0.1159108322171851,
+      "distanceAu": 31.03777527472523
+    },
+    "pluto": {
+      "lon": 96.67314366589989,
+      "lat": -4.1986096337369965,
+      "distanceAu": 44.787653441588745
+    },
+    "chiron": {
+      "lon": 4.552632767353373,
+      "lat": 3.327008250355228,
+      "distanceAu": 18.352148170992926
+    }
+  },
+  "ofDateApparent": {
+    "mars": {
+      "lon": 192.5575808,
+      "lat": -0.1331003
+    },
+    "jupiter": {
+      "lon": 91.1592644,
+      "lat": -0.250672
+    },
+    "saturn": {
+      "lon": 135.0277702,
+      "lat": 0.9256858
+    },
+    "uranus": {
+      "lon": 326.928567,
+      "lat": -0.766992
+    },
+    "neptune": {
+      "lon": 126.3754299,
+      "lat": -0.1237647
+    },
+    "pluto": {
+      "lon": 95.5405141,
+      "lat": -4.2090349
+    },
+    "chiron": {
+      "lon": 3.4204613,
+      "lat": 3.3252556
+    }
+  },
+  "moonOsculatingNodeJ2000": 263.0867862102908
+}

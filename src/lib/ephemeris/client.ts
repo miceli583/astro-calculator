@@ -7,7 +7,13 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { env } from "@/env.js";
-import { parseLocalISO, toUTC, type ParsedDateTime } from "./julian-day";
+import {
+  parseLocalISO,
+  toUTC,
+  toUTCResolved,
+  type LocalTimeKind,
+  type ParsedDateTime,
+} from "./julian-day";
 
 const require = createRequire(import.meta.url);
 
@@ -106,6 +112,33 @@ export const HOUSE_SYSTEMS = {
 
 export type HouseSystem = keyof typeof HOUSE_SYSTEMS;
 
+/**
+ * Which ephemeris actually produced a position.
+ *
+ * This is reported rather than assumed. This deployment ships only the
+ * 1800–2399 Swiss Ephemeris data files, so below 1800 sweph falls back to its
+ * built-in Moshier analytic theory — a real answer, at roughly arcsecond
+ * accuracy rather than milliarcsecond. That fallback is legitimate, but it must
+ * not be silent: a caller comparing a 1750 chart against a Swiss-grade one is
+ * entitled to know which one they got. See finding F1 (`docs/accuracy.md` §6).
+ */
+export type EphemerisSource = "swiss" | "moshier" | "jpl";
+
+const SEFLG_JPLEPH = 1;
+const SEFLG_SWIEPH = 2;
+const SEFLG_MOSEPH = 4;
+
+/** Read the ephemeris actually used out of sweph's returned flag bits. */
+export function ephemerisSourceFromFlag(flag: number): EphemerisSource {
+  if (flag & SEFLG_MOSEPH) return "moshier";
+  if (flag & SEFLG_JPLEPH) return "jpl";
+  if (flag & SEFLG_SWIEPH) return "swiss";
+  // sweph always sets one of the three on success; reaching here means the
+  // caller passed us a failure flag, which is the caller's bug, not a default
+  // worth guessing at.
+  throw new Error(`No ephemeris bit set in sweph flag ${flag}`);
+}
+
 export interface PlanetPosition {
   longitude: number; // ecliptic longitude in degrees, 0–360
   latitude: number; // ecliptic latitude in degrees
@@ -113,6 +146,24 @@ export interface PlanetPosition {
   longitudeSpeed: number; // deg/day; negative => retrograde
   latitudeSpeed: number;
   distanceSpeed: number;
+  /** Which ephemeris answered for THIS body at THIS instant. */
+  ephemeris: EphemerisSource;
+}
+
+/** A body sweph genuinely could not compute, with the reason it gave. */
+export interface UnavailableBody {
+  name: PlanetName;
+  reason: string;
+}
+
+export interface PlanetPositions {
+  positions: Record<string, PlanetPosition>;
+  /**
+   * Bodies sweph refused outright (`flag < 0`). Empty for every ordinary
+   * chart. Non-empty mainly for Chiron before 1800, which has no ephemeris at
+   * all — not a fallback case, an absence (finding F2).
+   */
+  unavailable: UnavailableBody[];
 }
 
 export interface HousesResult {
@@ -122,12 +173,45 @@ export interface HousesResult {
   armc: number; // sidereal time (degrees)
   vertex: number;
   equatorialAscendant: number;
+  /**
+   * The house system that actually produced `cusps` — not necessarily the one
+   * requested. Inside the polar circles Placidus and Koch are undefined, and
+   * sweph substitutes Porphyry rather than failing, signalling the swap through
+   * `flag < 0`. That flag used to be discarded, so a caller asking for Placidus
+   * at Tromsø received Porphyry cusps under the name `placidus`. See finding F5
+   * (`docs/chart-conventions.md` §7).
+   */
+  system: HouseSystem;
+  /** What the caller asked for. Differs from `system` only on a substitution. */
+  requestedSystem: HouseSystem;
 }
 
-// Convert ISO local datetime + IANA timezone to a UT Julian Day.
-export function julianDayUT(localIso: string, timeZone: string): number {
+/**
+ * Systems sweph refuses inside the polar circles, and what it silently
+ * substitutes. The substitution is asserted against an explicit `porphyrius`
+ * request in `tests/polar-houses.test.ts` rather than trusted here, so a change
+ * in sweph's behaviour fails CI instead of quietly relabelling cusps again.
+ */
+const POLAR_SUBSTITUTE: HouseSystem = "porphyrius";
+
+function resolveHouseSystem(requested: HouseSystem, flag: number): HouseSystem {
+  return flag < 0 ? POLAR_SUBSTITUTE : requested;
+}
+
+/**
+ * Convert ISO local datetime + IANA timezone to a UT Julian Day, also reporting
+ * how the wall clock mapped onto the timeline. `kind` is "unique" for every
+ * ordinary birth time; "gap" and "ambiguous" mean the local reading does not
+ * identify a single instant and a convention was applied to pick one. Callers
+ * with a warnings channel should surface those two — the resulting chart is
+ * defensible but not uniquely determined by the input.
+ */
+export function julianDayUTResolved(
+  localIso: string,
+  timeZone: string
+): { jd: number; utc: ParsedDateTime; offsetMinutes: number; kind: LocalTimeKind } {
   const local = parseLocalISO(localIso);
-  const utc = toUTC(local, timeZone);
+  const { utc, offsetMinutes, kind } = toUTCResolved(local, timeZone);
   const swe = getSwe();
   const result = swe.utc_to_jd(
     utc.year,
@@ -140,24 +224,92 @@ export function julianDayUT(localIso: string, timeZone: string): number {
   );
   // sweph returns { data: [jd_et, jd_ut], ... }
   // We use UT for chart calculations.
-  return result.data[1];
+  return { jd: result.data[1], utc, offsetMinutes, kind };
 }
 
-export function calcPlanet(jdUt: number, planet: PlanetName): PlanetPosition {
+// Convert ISO local datetime + IANA timezone to a UT Julian Day.
+export function julianDayUT(localIso: string, timeZone: string): number {
+  return julianDayUTResolved(localIso, timeZone).jd;
+}
+
+/**
+ * Compute one body, or report that sweph refused it.
+ *
+ * **Failure is signalled by `flag < 0`, not by a non-empty error string.**
+ * sweph uses that same string for WARNINGS — "SwissEph file 'sepl_12.se1' not
+ * found ... using Moshier eph." arrives alongside a perfectly good position and
+ * a positive flag. Gating on the string is why every pre-1800 birth used to
+ * return a 500 (finding F1).
+ */
+export function tryCalcPlanet(
+  jdUt: number,
+  planet: PlanetName
+): { ok: true; position: PlanetPosition } | { ok: false; reason: string } {
   const swe = getSwe();
   const id = PLANETS[planet];
   const out = swe.calc_ut(jdUt, id, SE_FLAGS);
-  if ("error" in out && out.error) {
-    throw new Error(`Ephemeris error for ${planet}: ${out.error}`);
+  if (out.flag < 0) {
+    return { ok: false, reason: normalizeSwephMessage(out.error) || `sweph flag ${out.flag}` };
   }
   const [longitude, latitude, distance, longitudeSpeed, latitudeSpeed, distanceSpeed] = out.data;
-  return { longitude, latitude, distance, longitudeSpeed, latitudeSpeed, distanceSpeed };
+  return {
+    ok: true,
+    position: {
+      longitude,
+      latitude,
+      distance,
+      longitudeSpeed,
+      latitudeSpeed,
+      distanceSpeed,
+      ephemeris: ephemerisSourceFromFlag(out.flag),
+    },
+  };
 }
 
-export function calcAllPlanets(jdUt: number, planets: readonly PlanetName[]): Record<string, PlanetPosition> {
-  const out: Record<string, PlanetPosition> = {};
-  for (const p of planets) out[p] = calcPlanet(jdUt, p);
-  return out;
+/** sweph messages carry embedded newlines and a trailing "; " — tidy for prose. */
+function normalizeSwephMessage(msg: string | undefined): string {
+  return (msg ?? "").replace(/\s+/g, " ").replace(/;\s*$/, "").trim();
+}
+
+/** Compute one body, throwing if sweph refuses it. */
+export function calcPlanet(jdUt: number, planet: PlanetName): PlanetPosition {
+  const r = tryCalcPlanet(jdUt, planet);
+  if (!r.ok) throw new Error(`Ephemeris error for ${planet}: ${r.reason}`);
+  return r.position;
+}
+
+/**
+ * Compute a set of bodies, separating the ones sweph refused from the ones it
+ * answered. Callers that need every body should check `unavailable`; callers
+ * building a chart should report the gap rather than fail the whole chart.
+ */
+export function calcAllPlanets(
+  jdUt: number,
+  planets: readonly PlanetName[]
+): PlanetPositions {
+  const positions: Record<string, PlanetPosition> = {};
+  const unavailable: UnavailableBody[] = [];
+  for (const p of planets) {
+    const r = tryCalcPlanet(jdUt, p);
+    if (r.ok) positions[p] = r.position;
+    else unavailable.push({ name: p, reason: r.reason });
+  }
+  return { positions, unavailable };
+}
+
+/**
+ * The single ephemeris that answered for a whole set of positions, or `"mixed"`
+ * if they disagree. In practice a chart is uniformly one source, because the
+ * data-file boundary is a function of the instant, not of the body.
+ */
+export function summarizeEphemeris(
+  positions: Record<string, PlanetPosition>
+): EphemerisSource | "mixed" | null {
+  const seen = new Set<EphemerisSource>();
+  for (const p of Object.values(positions)) seen.add(p.ephemeris);
+  if (seen.size === 0) return null;
+  if (seen.size > 1) return "mixed";
+  return [...seen][0];
 }
 
 export function calcHouses(
@@ -179,6 +331,8 @@ export function calcHouses(
     armc: points[2],
     vertex: points[3],
     equatorialAscendant: points[4],
+    system: resolveHouseSystem(system, result.flag),
+    requestedSystem: system,
   };
 }
 
@@ -186,8 +340,10 @@ export function calcHouses(
 export function obliquity(jdUt: number): number {
   const swe = getSwe();
   const out = swe.calc_ut(jdUt, swe.constants.SE_ECL_NUT, SE_FLAGS);
-  if ("error" in out && out.error) {
-    throw new Error(`Ephemeris error for obliquity: ${out.error}`);
+  // flag < 0 is failure; a non-empty message alongside a positive flag is a
+  // warning about which ephemeris answered, not an error (F1).
+  if (out.flag < 0) {
+    throw new Error(`Ephemeris error for obliquity: ${normalizeSwephMessage(out.error)}`);
   }
   return out.data[0];
 }
@@ -216,6 +372,8 @@ export function calcHousesFromArmc(
     armc: points[2],
     vertex: points[3],
     equatorialAscendant: points[4],
+    system: resolveHouseSystem(system, result.flag),
+    requestedSystem: system,
   };
 }
 
@@ -233,8 +391,8 @@ export function calcPlanetEquatorial(jdUt: number, planet: PlanetName): Equatori
   const swe = getSwe();
   const id = PLANETS[planet];
   const out = swe.calc_ut(jdUt, id, SE_FLAG_EQ);
-  if ("error" in out && out.error) {
-    throw new Error(`Ephemeris equatorial error for ${planet}: ${out.error}`);
+  if (out.flag < 0) {
+    throw new Error(`Ephemeris equatorial error for ${planet}: ${normalizeSwephMessage(out.error)}`);
   }
   const [rightAscension, declination, distance] = out.data;
   return { rightAscension, declination, distance };
@@ -247,6 +405,7 @@ export function greenwichSiderealTimeDeg(jdUt: number): number {
 }
 
 export type ParsedDateTimeUtc = ParsedDateTime;
+export type { LocalTimeKind };
 
 // Re-export for convenience
-export { parseLocalISO, toUTC };
+export { parseLocalISO, toUTC, toUTCResolved };

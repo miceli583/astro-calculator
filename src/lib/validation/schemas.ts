@@ -62,11 +62,26 @@ export const natalInputSchema = natalChartOptionsSchema.extend({
   planets: z.array(planetEnum).optional(),
 });
 
+// Declared above its first use: these are `const`s evaluated at module load, so
+// a schema that references this one before this line is a TDZ error, not a
+// hoisted forward reference.
+const orbOverrideSchema = z
+  .object({
+    conjunction: z.number().min(0).max(15).optional(),
+    sextile: z.number().min(0).max(15).optional(),
+    square: z.number().min(0).max(15).optional(),
+    trine: z.number().min(0).max(15).optional(),
+    quincunx: z.number().min(0).max(15).optional(),
+    opposition: z.number().min(0).max(15).optional(),
+  })
+  .partial();
+
 export const transitInputSchema = z.object({
   natal: birthDataSchema.extend({ house_system: houseSystemSchema.optional() }),
   transit_datetime: z.string().regex(ISO_DATETIME),
   transit_timezone: z.string(),
   planets: z.array(planetEnum).optional(),
+  orbs: orbOverrideSchema.optional(),
 });
 
 export const progressedInputSchema = birthDataSchema.extend({
@@ -84,17 +99,6 @@ export const aspectTypeSchema = z.enum([
   "quincunx",
   "opposition",
 ]);
-
-const orbOverrideSchema = z
-  .object({
-    conjunction: z.number().min(0).max(15).optional(),
-    sextile: z.number().min(0).max(15).optional(),
-    square: z.number().min(0).max(15).optional(),
-    trine: z.number().min(0).max(15).optional(),
-    quincunx: z.number().min(0).max(15).optional(),
-    opposition: z.number().min(0).max(15).optional(),
-  })
-  .partial();
 
 export const transitSkyInputSchema = z.object({
   datetime: z.string().regex(ISO_DATETIME),

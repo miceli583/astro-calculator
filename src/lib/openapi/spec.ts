@@ -1,6 +1,36 @@
 // OpenAPI 3.1 specification for the public Astro Calculator API.
 // Hand-authored (not derived from Zod) for control over docs and examples.
 
+import { API_VERSION } from "../version";
+
+// Repeated verbatim on every endpoint that returns computed positions. Responses
+// are description-only (see TODO.md), so this prose IS the contract for the
+// `ephemeris` / `unavailableBodies` pair — it must say the same thing everywhere.
+const EPHEMERIS_PROSE =
+  "`ephemeris` names the data source that actually produced the positions: `\"swiss\"`, " +
+  "`\"moshier\"`, `\"jpl\"`, or `\"mixed\"`. Dates outside the shipped Swiss Ephemeris data " +
+  "files (before 1800 CE) are answered from the Moshier analytic theory and labelled " +
+  "`\"moshier\"` rather than rejected — arc-second-level agreement for the Sun and planets, " +
+  "coarser for the Moon. `unavailableBodies` is OPTIONAL (key absent when every requested " +
+  "body was computed) and lists each body the ephemeris refuses for that instant as " +
+  "`{ name, longitude: null, reason }`; Chiron before 1800 is the common case, since no " +
+  "ephemeris for it exists there at all.";
+
+const HOUSES_PROSE =
+  "`houses.system` names the house system that actually produced the cusps, which is not " +
+  "always the one requested: inside the polar circles Placidus and Koch are undefined, and " +
+  "Swiss Ephemeris substitutes Porphyry cusps. When that happens `houses.system` is " +
+  "`\"porphyrius\"` and `houses.requestedSystem` records what was asked for; " +
+  "`requestedSystem` is OPTIONAL and its key is absent whenever no substitution occurred. " +
+  "The substitution is detected from the ephemeris return flag, not a latitude threshold — " +
+  "the true boundary tracks the obliquity and moves with the epoch. Regiomontanus and " +
+  "Campanus are defined at every latitude but, above the polar circles and over a window of " +
+  "sidereal time that widens with latitude, the wheel runs BACKWARDS: cusps descend, ten of " +
+  "the twelve houses are hairline-narrow and two span roughly 180°. Bodies are still placed " +
+  "in the house that genuinely contains them and the cusps are exact, but the house numbers " +
+  "are not comparable with a temperate chart's, and `warnings` says so. `equal` and " +
+  "`whole_sign` stay ordered at every latitude.";
+
 export interface OpenAPISpec {
   openapi: string;
   info: Record<string, unknown>;
@@ -14,7 +44,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
     openapi: "3.1.0",
     info: {
       title: "Astro Calculator API",
-      version: "0.1.0",
+      version: API_VERSION,
       description:
         "Public, AGPL-licensed calculator API for astrology, astrocartography, " +
         "Human Design, Gene Keys, Life Path numerology, and Destiny Cards. " +
@@ -45,7 +75,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             content: { "application/json": { schema: { $ref: "#/components/schemas/NatalInput" } } },
           },
           responses: {
-            "200": { description: "Natal chart with planets, houses, aspects, aspect patterns (stellium, grand trine, T-square, grand cross, yod, kite, mystic rectangle), and the chart ruler (ruler of the Ascendant sign with placement + aspects)" },
+            "200": { description: "Natal chart with planets, houses, aspects, aspect patterns (stellium, grand trine, T-square, grand cross, yod, kite, mystic rectangle), and the chart ruler (ruler of the Ascendant sign with placement + aspects). `partOfFortune` is OPTIONAL: its formula requires both luminaries, so the field is omitted entirely (key absent) when `planets` excludes the Sun or the Moon. Its `isDayBirth` is determined by the Sun's position relative to the horizon and does not vary with `house_system`. " + EPHEMERIS_PROSE + " " + HOUSES_PROSE },
             "422": { description: "Invalid input" },
           },
         },
@@ -57,7 +87,14 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/TransitInput" } } },
           },
-          responses: { "200": { description: "Transit chart" } },
+          responses: {
+            "200": {
+              description:
+                "Transit chart. Aspects to the natal chart use the TRANSIT orb table (conjunction/opposition/square 3°, trine/sextile 2°, quincunx 1.5°) — the same table as `/api/v1/transit/natal`, so both endpoints return the same aspects for the same moment. Each aspect carries `motion`: `\"applying\"`, `\"separating\"`, or `\"stationary\"` when the two bodies' relative speed is below 1e-4°/day. The boolean `applying` is OPTIONAL and is omitted entirely (key absent) when `motion` is `\"stationary\"`, since neither direction would be a true claim. That table is the DEFAULT, not a ceiling: send `orbs` to override any subset of it, merged over the defaults, exactly as `/api/v1/transit/natal` and `/api/v1/synastry` accept it. The two transit endpoints agree under a custom table as well as the default one. " +
+                EPHEMERIS_PROSE +
+                " The transit sky is sourced separately from the natal chart, so it reports `transitEphemeris` and `unavailableTransitBodies` alongside the natal chart's own `ephemeris` and `unavailableBodies`.",
+            },
+          },
         },
       },
       "/api/v1/transit": {
@@ -67,7 +104,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
           },
-          responses: { "200": { description: "Planet longitudes, signs, HD gates, and sky-wide aspect patterns (sign-based) for the given moment" } },
+          responses: { "200": { description: "Planet longitudes, signs, HD gates, and sky-wide aspect patterns (sign-based) for the given moment. " + EPHEMERIS_PROSE } },
         },
       },
       "/api/v1/transit/natal": {
@@ -77,7 +114,8 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
           },
-          responses: { "200": { description: "Natal chart, transit sky, and overlay (aspects, hdActivations, houseOverlays)" } },
+          responses: { "200": { description:
+                "Natal chart, transit sky, and overlay (aspects, hdActivations, houseOverlays). Each aspect hit carries `motion`: `\"applying\"`, `\"separating\"`, or `\"stationary\"`. The boolean `applying` is OPTIONAL — omitted (key absent) when the direction is not determinate, i.e. `motion` is `\"stationary\"` or no speed was available for the moving point. `motion` itself is absent in that no-speed case, which is a different claim from `\"stationary\"`: unknown rather than none." } },
         },
       },
       "/api/v1/transit/events": {
@@ -103,7 +141,8 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
           },
-          responses: { "200": { description: "Both natal charts plus bidirectional overlays (bOnA and aOnB)" } },
+          responses: { "200": { description:
+                "Both natal charts plus bidirectional overlays (bOnA and aOnB). Aspect hits carry the same optional `applying` / three-valued `motion` fields as `/api/v1/transit/natal`." } },
         },
       },
       "/api/v1/composite": {
@@ -115,7 +154,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/CompositeInput" } } },
           },
-          responses: { "200": { description: "Natal-style composite chart: midpoint planets with sign + house, derived house wheel, Part of Fortune, internal aspects, aspect patterns, and the composite chart ruler" } },
+          responses: { "200": { description: "Natal-style composite chart: midpoint planets with sign + house, derived house wheel, internal aspects, aspect patterns, and the composite chart ruler. `partOfFortune` is OPTIONAL — omitted entirely (key absent) when either luminary is missing from the composite point set — and its sect is read from the composite horizon, so it does not vary with `house_system`. " + HOUSES_PROSE + " The composite wheel is cast at `referenceLatitude`, so it is that latitude — not the birth latitudes — that decides whether a substitution or a reversal happens." } },
         },
       },
       "/api/v1/astrology/progressions": {
@@ -125,7 +164,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/ProgressedInput" } } },
           },
-          responses: { "200": { description: "Progressed inner-planet positions for the requested age" } },
+          responses: { "200": { description: "Progressed inner-planet positions for the requested age. " + EPHEMERIS_PROSE } },
         },
       },
       "/api/v1/astrology/solar-return": {
@@ -135,7 +174,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/SolarReturnInput" } } },
           },
-          responses: { "200": { description: "Full natal-style chart cast at the moment the transit Sun returns to the natal Sun longitude" } },
+          responses: { "200": { description: "Full natal-style chart cast at the moment the transit Sun returns to the natal Sun longitude. As with the natal chart, `partOfFortune` is optional and omitted when a luminary is absent from the requested `planets` subset. " + EPHEMERIS_PROSE } },
         },
       },
       "/api/v1/astrology/planetary-return": {
@@ -147,7 +186,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/PlanetaryReturnInput" } } },
           },
-          responses: { "200": { description: "Full natal-style chart cast at the return moment, with the planet, natal longitude, and return JD-UT" } },
+          responses: { "200": { description: "Full natal-style chart cast at the return moment, with the planet, natal longitude, and return JD-UT. As with the natal chart, `partOfFortune` is optional and omitted when a luminary is absent from the requested `planets` subset. " + EPHEMERIS_PROSE } },
         },
       },
       "/api/v1/astrocartography": {
@@ -261,6 +300,20 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             transit_datetime: { type: "string", example: "2026-05-15T12:00:00" },
             transit_timezone: { type: "string", example: "UTC" },
             planets: { type: "array", items: { type: "string" } },
+            orbs: { $ref: "#/components/schemas/OrbOverride" },
+          },
+        },
+        OrbOverride: {
+          type: "object",
+          description:
+            "Per-aspect orb overrides, in degrees. Merged OVER the endpoint's default table rather than replacing it: any aspect you omit keeps its default orb. Capped at 15° per aspect, which is half the smallest gap between two exact aspect angles — so no two aspect windows can overlap and each pair of bodies still yields at most one aspect.",
+          properties: {
+            conjunction: { type: "number", minimum: 0, maximum: 15, example: 6 },
+            sextile: { type: "number", minimum: 0, maximum: 15 },
+            square: { type: "number", minimum: 0, maximum: 15 },
+            trine: { type: "number", minimum: 0, maximum: 15 },
+            quincunx: { type: "number", minimum: 0, maximum: 15 },
+            opposition: { type: "number", minimum: 0, maximum: 15 },
           },
         },
         AstroCartoInput: {

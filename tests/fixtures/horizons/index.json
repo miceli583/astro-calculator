@@ -1,0 +1,105 @@
+{
+  "harvestedAt": "2026-08-12",
+  "charts": [
+    {
+      "id": "mandela-1918-mvezo",
+      "why": "southern hemisphere, pre-1970, established reference chart",
+      "present": true
+    },
+    {
+      "id": "sydney-1985-southern-dst",
+      "why": "southern hemisphere with DST in JANUARY — reversed seasonal sense",
+      "present": true
+    },
+    {
+      "id": "ushuaia-1980-subpolar-south",
+      "why": "sub-polar southern latitude (54.8 S)",
+      "present": true
+    },
+    {
+      "id": "santiago-1974-southern-transition",
+      "why": "southern-hemisphere DST edge, day of transition",
+      "present": true
+    },
+    {
+      "id": "tromso-1975-arctic",
+      "why": "69.65 N — above the Arctic Circle, quadrant houses degenerate",
+      "present": true
+    },
+    {
+      "id": "longyearbyen-1990-polar-night",
+      "why": "78.22 N at the winter solstice — the extreme case",
+      "present": true
+    },
+    {
+      "id": "reykjavik-1962-subarctic",
+      "why": "64.15 N, zone with no DST and a non-integer historical offset",
+      "present": true
+    },
+    {
+      "id": "paris-1750-pre-gregorian-clocks",
+      "why": "1750 — long before standard time; proleptic-Gregorian JD, large ΔT",
+      "present": true
+    },
+    {
+      "id": "boston-1799-lmt",
+      "why": "pre-1800, Local Mean Time offset carrying seconds",
+      "present": true
+    },
+    {
+      "id": "nyc-1883-standard-time-eve",
+      "why": "1883-11-17, the last day of New York LMT (−04:56:02)",
+      "present": true
+    },
+    {
+      "id": "vienna-1899-turn-of-century",
+      "why": "pre-1900, integer-offset standard time already in force",
+      "present": true
+    },
+    {
+      "id": "london-1950-postwar",
+      "why": "pre-1970 with British Summer Time active",
+      "present": true
+    },
+    {
+      "id": "nyc-2005-gap-inside",
+      "why": "birth INSIDE the skipped hour (spring forward) — resolves as kind=gap",
+      "present": true
+    },
+    {
+      "id": "nyc-2005-gap-minus-1min",
+      "why": "one minute before the same gap — must NOT shift",
+      "present": true
+    },
+    {
+      "id": "nyc-2005-ambiguous",
+      "why": "fall-back hour, occurs twice — resolves to the FIRST occurrence",
+      "present": true
+    },
+    {
+      "id": "lisbon-1992-transition-day",
+      "why": "DST edge in a zone that changed its base offset that decade",
+      "present": true
+    },
+    {
+      "id": "kolkata-1972-half-hour",
+      "why": "+05:30 half-hour zone",
+      "present": true
+    },
+    {
+      "id": "kathmandu-1984-45min",
+      "why": "+05:45 — a 45-minute offset, and after Nepal's 1986 shift this zone changes",
+      "present": true
+    },
+    {
+      "id": "chatham-2000-1245-dst",
+      "why": "+13:45 — the largest offset in the database, DST active",
+      "present": true
+    },
+    {
+      "id": "kiritimati-1999-antimeridian",
+      "why": "+14:00 across the antimeridian; local date leads UTC by a day",
+      "present": true
+    }
+  ]
+}

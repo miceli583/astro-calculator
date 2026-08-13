@@ -1,40 +1,32 @@
-// Human Design output snapshot for Princess Diana's chart.
+// Human Design output well-formedness for Princess Diana's chart.
 //
-// PURPOSE: regression detection. The gate-wheel offset (GATE_WHEEL_OFFSET in
-// src/lib/constants/hd-gates.ts) is currently 3.875° but the published HD
-// chart for Diana (per jovianarchive.com) may indicate a different value.
-// Until the offset has been verified against a known HD chart, the gate-level
-// output of this calculator should be treated as PROVISIONAL.
+// PURPOSE: catch a whole-output break — a calculator that returns an
+// out-of-range gate, a malformed profile, an unknown type/authority, or a
+// half-populated activation set — for a real birth chart rather than a
+// synthetic one. Every assertion here is a range or enum invariant; no
+// captured value is asserted, so this file is deliberately insensitive to the
+// gate wheel's calibration.
 //
-// This file:
-//   1. Snapshots the current output so any future change to GATE_WHEEL_OFFSET
-//      or the gate sequence is detected and reviewed.
-//   2. Documents the structural relationships (type, channels) that depend on
-//      whichever gate set comes out — these are unit-tested separately and
-//      pass regardless of the specific offset.
+// The gate wheel itself is anchored elsewhere and is NOT provisional:
+// GATE_WHEEL_OFFSET = 358.25°, fixed by the Rave Mandala convention that
+// Gate 41 begins at 2°00' Aquarius (302.00° tropical). That anchor, shared by
+// Jovian Archive and multiple independent open-source HD calculators, is
+// asserted in tests/hd-gates.test.ts — which is where a calibration change
+// would be caught.
 //
-// To verify: run https://jovianarchive.com/Get_Your_Chart with Diana's birth
-// data (1961-07-01 19:45 BST, Sandringham UK 52°50'N 0°30'E) and compare:
-//   - Type
-//   - Profile
-//   - Personality Sun gate.line
-//   - Design Sun gate.line
-//   - Defined centers
-// Then update GATE_WHEEL_OFFSET (and possibly GATE_SEQUENCE rotation) and
-// the expected values in this file. Until then we treat the snapshot as a
-// "current state" not a verified reference.
+// NOTE: this file's header previously described a 3.875° offset as unverified
+// and the output as PROVISIONAL. That was stale: the offset was calibrated and
+// externally anchored, and the comment was never updated. Corrected 2026-08-12.
 
 import { describe, it, expect } from "vitest";
 import { calculateHumanDesign } from "@/lib/calculators/human-design";
 import { DIANA } from "./fixtures/charts";
 
-describe("HD — Diana snapshot (PROVISIONAL — gate offset not yet verified)", () => {
+describe("HD — Diana output well-formedness (gate wheel anchored in hd-gates.test.ts)", () => {
   const chart = calculateHumanDesign(DIANA.birth);
 
-  it("Personality Sun gate is deterministic for a fixed offset", () => {
+  it("Personality Sun activation is a well-formed gate.line", () => {
     const sun = chart.personality.activations.find((a) => a.planet === "sun")!;
-    // Snapshot the current value. Change this only when GATE_WHEEL_OFFSET
-    // is updated to match a verified jovianarchive.com chart for Diana.
     expect(sun.gate).toBeGreaterThanOrEqual(1);
     expect(sun.gate).toBeLessThanOrEqual(64);
     expect(sun.line).toBeGreaterThanOrEqual(1);

@@ -25,8 +25,10 @@ import {
 import type { BirthData } from "../types/birth-data";
 import {
   calculateNatalChart,
+  houseFor,
   computeAspects,
   computeChartRuler,
+  computePartOfFortune,
   longitudeToSign,
   patternPointsFromPlanets,
   type Aspect,
@@ -37,7 +39,6 @@ import {
 } from "./astrology";
 import { detectAspectPatterns, type AspectPattern } from "./aspect-patterns";
 import type { RulershipConvention } from "../constants/rulerships";
-import { houseFor } from "./overlay";
 
 /** Max charts in one composite. */
 export const MAX_COMPOSITE_CHARTS = 10;
@@ -77,7 +78,10 @@ export interface CompositeChart {
   referenceLatitudeSource: "mean_birth_latitude" | "explicit";
   planets: CompositePoint[];
   houses: {
+    /** The system that produced the cusps — the substitute, if one was made (F5). */
     system: HouseSystem;
+    /** Present only on a substitution; then this is what was requested. */
+    requestedSystem?: HouseSystem;
     /** House-wheel construction method (see module docs). */
     method: "derived-from-composite-mc";
     cusps: { house: number; longitude: number; sign: SignPosition }[];
@@ -85,7 +89,13 @@ export interface CompositeChart {
     midheaven: { longitude: number; sign: SignPosition };
     vertex: { longitude: number; sign: SignPosition };
   };
-  partOfFortune: {
+  /**
+   * Composite Part of Fortune. Sect is taken from the composite Sun's position
+   * relative to the composite horizon, so it does not vary with the requested
+   * house system (F7). **Optional** — omitted when either luminary is absent
+   * from the requested `planets` subset (F8).
+   */
+  partOfFortune?: {
     longitude: number;
     sign: SignPosition;
     house: number;
@@ -186,10 +196,22 @@ export function calculateComposite(input: CompositeInput): CompositeChart {
   const houses = calcHousesFromArmc(armc, referenceLatitude, eps, houseSystem);
   const cusps = houses.cusps;
 
-  if (Math.abs(referenceLatitude) >= 66.5 && ["placidus", "koch", "regiomontanus", "campanus"].includes(houseSystem)) {
+  // Same rule as the natal path: the substitution is read off sweph's flag, not
+  // guessed from a latitude constant that is both wrong and epoch-dependent (F5).
+  if (houses.system !== houses.requestedSystem) {
+    warnings.push(
+      `Reference latitude ${referenceLatitude.toFixed(2)}° is beyond the polar circle, ` +
+        `where ${houses.requestedSystem} cusps are undefined. These are ${houses.system} ` +
+        `cusps — exact for that system, not unreliable ${houses.requestedSystem} ones. ` +
+        `Consider whole_sign or equal.`
+    );
+  } else if (
+    Math.abs(referenceLatitude) >= 66.5 &&
+    ["placidus", "koch", "regiomontanus", "campanus"].includes(houseSystem)
+  ) {
     warnings.push(
       `Reference latitude ${referenceLatitude.toFixed(2)}° is at or beyond the polar circle; ` +
-        `${houseSystem} composite cusps may be unreliable. Consider whole_sign or equal.`
+        `${houseSystem} composite houses become extremely unequal. Consider whole_sign or equal.`
     );
   }
 
@@ -221,28 +243,15 @@ export function calculateComposite(input: CompositeInput): CompositeChart {
   });
 
   // ── Part of Fortune from composite ASC/Sun/Moon (same rule as natal) ────
+  // Shares the natal implementation so the two cannot drift: sect from the
+  // horizon (F7), field omitted rather than fabricated when a luminary is
+  // missing from the requested subset (F8).
   const sun = planets.find((p) => p.name === "sun");
   const moon = planets.find((p) => p.name === "moon");
-  let partOfFortune: CompositeChart["partOfFortune"];
-  if (sun && moon) {
-    const isDayBirth = sun.house >= 7 && sun.house <= 12;
-    const pofLon = isDayBirth
-      ? (((houses.ascendant + moon.longitude - sun.longitude) % 360) + 360) % 360
-      : (((houses.ascendant + sun.longitude - moon.longitude) % 360) + 360) % 360;
-    partOfFortune = {
-      longitude: pofLon,
-      sign: longitudeToSign(pofLon),
-      house: houseFor(pofLon, cusps),
-      isDayBirth,
-    };
-  } else {
-    partOfFortune = {
-      longitude: houses.ascendant,
-      sign: longitudeToSign(houses.ascendant),
-      house: 1,
-      isDayBirth: false,
-    };
-  }
+  const partOfFortune =
+    sun && moon
+      ? computePartOfFortune(houses.ascendant, sun.longitude, moon.longitude, cusps)
+      : undefined;
 
   // ── Aspects within the composite chart (natal-scale orbs, speed 0) ──────
   const natalShaped: NatalPlanet[] = planets.map((p) => ({
@@ -265,7 +274,11 @@ export function calculateComposite(input: CompositeInput): CompositeChart {
     referenceLatitudeSource,
     planets,
     houses: {
-      system: houseSystem,
+      // The system that produced the cusps, not the one requested (F5).
+      system: houses.system,
+      ...(houses.system !== houses.requestedSystem
+        ? { requestedSystem: houses.requestedSystem }
+        : {}),
       method: "derived-from-composite-mc",
       cusps: cusps.map((cusp, i) => ({
         house: i + 1,
@@ -276,7 +289,11 @@ export function calculateComposite(input: CompositeInput): CompositeChart {
       midheaven: { longitude: houses.midheaven, sign: longitudeToSign(houses.midheaven) },
       vertex: { longitude: houses.vertex, sign: longitudeToSign(houses.vertex) },
     },
-    partOfFortune,
+    // Spread rather than assign, so an omitted Part of Fortune leaves the key
+    // genuinely ABSENT rather than present-and-undefined. JSON.stringify drops
+    // undefined either way, but a JS consumer doing `"partOfFortune" in chart`
+    // would otherwise see a field that is not there (F8).
+    ...(partOfFortune ? { partOfFortune } : {}),
     aspects,
     patterns: detectAspectPatterns(patternPointsFromPlanets(natalShaped)),
     chartRuler: computeChartRuler(ascendantSign, natalShaped, aspects, input.rulership),
