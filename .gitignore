@@ -51,3 +51,6 @@ soul-map-prompt.md
 # hold mission-scoped evidence, scratch harness scripts, and browser logs.
 .hermes/
 .playwright-mcp/
+# per-card git worktrees; a full second copy of the tree, so an `add -A` here
+# would commit the source twice.
+.worktrees/
