@@ -193,6 +193,21 @@ a few hundredths of a degree; houses 3 and 9 span ~181°. The forward arc from
 cusp 1 to cusp 2 is −0.03°, so the wheel is not merely crowded, it is locally
 **out of zodiacal order** — which is what breaks §5's membership rule (F6).
 
+Not locally, though: it is out of order *throughout*. Inside these windows the
+whole wheel runs **retrograde** — cusp 1 → cusp 2 → cusp 3 descends rather than
+ascends, and house *k* runs from cusp *k+1* forward to cusp *k*. Swept across a
+full sidereal day at seven latitudes and seven house systems, every one of
+**4186** degenerate instants had forward arcs summing to 360 × 11 and backward
+arcs summing to exactly 360 (worst residual 0.000000000). Read in that
+direction the twelve houses partition the circle exactly once, with no gap and
+no overlap — the same invariant §5 asserts for a temperate chart.
+
+So the wheel is reversed, not broken. House numbering reverses with it, mapping
+house *k* to *2 − k* (mod 12); house 1 *ends* at the Ascendant instead of
+beginning there. Cross-checked against a system that stays ordered at every
+latitude: `whole_sign` puts the Longyearbyen Moon in house 5, and 2 − 5 ≡ 9
+(mod 12) is exactly where the Regiomontanus wheel puts it.
+
 This is not a latitude threshold but a **window of sidereal time that widens
 with latitude**. Sweeping ARMC through a full turn at fixed epoch:
 
@@ -213,7 +228,9 @@ the first version of F6 was written from a single chart and was wrong (§7).
 **The cusps themselves are exact.** Every one of the twelve collapsed cusps
 satisfies its defining coplanarity condition to 8.6 × 10⁻¹¹ arcsec. Swiss
 Ephemeris is right to report success; the geometry really does do this. What
-fails is our assumption about the *shape* of the answer.
+failed was our assumption about the *direction* of the answer — an assumption
+`houseSpans` no longer makes: it measures which direction closes the circle
+rather than presuming forward.
 
 ### 6.3 The policy
 
@@ -222,12 +239,20 @@ fails is our assumption about the *shape* of the answer.
   asserts the *degeneracy itself* — that Placidus is refused above the polar
   circle and that the fallback is Porphyry — so the boundary cannot move
   silently.
-- Callers at |latitude| ≥ 66.5° should use `whole_sign` or `equal`, both of
+- Callers above the polar circle should use `whole_sign` or `equal`, both of
   which are defined everywhere and ordered everywhere. The suite asserts that:
   every house in both systems spans exactly 30° at every fixture latitude,
   including the polar ones.
-- The API must not present a substituted or collapsed wheel as though it were
-  the requested system. Today it does; that is F5 and F6.
+- The API must not present a substituted or reversed wheel as though it were an
+  ordinary chart in the requested system. It no longer does: `houses.system`
+  names the system that produced the cusps and `houses.requestedSystem` records
+  what was asked for when they differ (F5), and a reversed wheel is both read
+  correctly and announced in `warnings` (F6). See §7.
+- **No latitude constant appears in the substitution logic.** The boundary is
+  read from Swiss Ephemeris's return flag, because it is not a constant: it
+  tracks the obliquity, moving from 66.532697° (1800) through 66.562323°
+  (J2000) to 66.577351° (≈2333). The old hardcoded 66.5° both warned on charts
+  that were fine and named the wrong system for charts that were not.
 
 ---
 
@@ -265,6 +290,25 @@ Ephemeris switches at the true polar circle for the epoch (between 66.4° and
 66.6° in the measurements above). Whatever disposition is chosen should take
 the boundary from the returned flag rather than from a constant.
 
+**Resolved** by disposition 1. `calcHouses` and `calcHousesFromArmc` now read
+`result.flag` and return `system` — the system that actually produced the cusps
+— alongside `requestedSystem`. The chart, composite and API responses carry
+`houses.system`, and `houses.requestedSystem` only when a substitution
+happened, so a machine consumer can detect it without parsing prose. The
+warning now says what occurred: *"placidus house cusps are undefined. These are
+porphyrius cusps — exact for that system, not unreliable placidus ones."*
+
+Disposition 2 (4xx) was rejected: the substituted cusps are a correct answer to
+a well-formed request, and refusing them would break every existing caller at
+high latitude to no benefit. Disposition 3 was rejected as the finding
+describes.
+
+The boundary constant was not corrected — it was **removed from the decision**.
+The suite binary-searches the true boundary and pins it at three epochs
+(66.532697° / 66.562323° / 66.577351°) precisely to show that no constant can
+be right; 66.5° survives only as secondary advice for the systems sweph does
+*not* substitute, where there is no flag to read.
+
 ### F6 — a collapsed wheel puts every body in the first house, silently
 
 Inside the windows in §6.2, Regiomontanus and Campanus return a wheel whose
@@ -298,6 +342,45 @@ return. Candidate dispositions, as with F5, are a product call.
 > ordered. The real behaviour is a collapse over a sidereal-time window that
 > widens with latitude (§6.2), and the suite now asserts that structure —
 > monotonic growth in latitude — rather than a single sampled chart.
+>
+> The premise was right about the *shape* and wrong about its *universality*.
+> Inside the windows the wheel genuinely does run in reverse; outside them it
+> does not, and both polar fixtures happened to sit outside. A twenty-instant
+> fixture set misses an 8/360 window; only the sweep finds it.
+
+**Resolved** by measuring the direction instead of assuming it. `houseSpans`
+(`calculators/astrology.ts`) computes the twelve forward arcs, and if they do
+not sum to 360 it computes the backward ones and uses those — house *i* running
+from cusp *i+1* forward to cusp *i*. `houseFor` places bodies by offset within
+those spans. Every longitude then lands in exactly one house at every one of
+the 11 520 swept instants.
+
+Two rejected approaches, both recorded because both look right:
+
+- **Normalising each arc into [0, 360)** is the bug, not the fix: it is exactly
+  what turns a −0.03° house into a 359.97° one.
+- **Flipping the largest arc by −360°** (a plausible "un-wrap the outlier"
+  heuristic) is wrong too, and measurably so: at 66.6° N, ARMC 270° it produces
+  two houses of 270.065° that overlap by 180.13°. Direction is a property of
+  the whole wheel; it cannot be inferred from one arc.
+
+A correction to the finding above: the Longyearbyen Moon (163.98°) and Jupiter
+(93.40°) land in house **9**, not house 3. The "house 3" in the original
+write-up came from reading the wide arc forward — the very assumption at issue.
+Under the reversal map house 3 ↔ house 9, and `whole_sign` independently agrees
+(§6.2).
+
+The reversal is also **announced**: a chart whose wheel runs backwards carries a
+warning saying so, that ten of twelve houses are hairline-narrow, that the
+placements are nevertheless correct, and that house numbers there are not
+comparable with a temperate chart's.
+
+One further change came out of the fix rather than the finding. `houseFor`
+existed **twice** — privately in `astrology.ts` and exported from `overlay.ts`
+(used by composite, synastry, transit-to-natal and the event scanner) — so F6
+was a single defect that had to be found and fixed in two places. The two are
+now one function, re-exported, and the suite asserts the overlay path and the
+chart path agree above the polar circle.
 
 ### Where it checks out
 
@@ -388,9 +471,12 @@ a source that is not Swiss Ephemeris.
   (`docs/accuracy.md` §6) makes `calculateNatalChart` throw on them. The
   exclusion is itself asserted — the suite requires those charts to keep
   throwing — so when F1 is dispositioned this test fails and forces them back in.
-- **F5 and F6 are pinned as characterization tests**: they assert today's
-  *defective* behaviour so that changing it is a deliberate act. Each carries a
-  comment saying the test must be rewritten when the finding is dispositioned.
+- **F5 and F6 were pinned as characterization tests**: they asserted the
+  *defective* behaviour so that changing it had to be a deliberate act, each
+  carrying a comment saying the test must be rewritten when the finding was
+  dispositioned. That is what happened — the fix broke them, exactly as
+  designed, and they now assert the corrected behaviour. `tests/polar-houses.
+  test.ts` carries the sweep.
 - **No comparison against astro.com, astroseek, or any other program.** Nothing
   at this tier is a check against another implementation, so nothing at this
   tier can be mistaken for external verification.

@@ -16,6 +16,21 @@ const EPHEMERIS_PROSE =
   "`{ name, longitude: null, reason }`; Chiron before 1800 is the common case, since no " +
   "ephemeris for it exists there at all.";
 
+const HOUSES_PROSE =
+  "`houses.system` names the house system that actually produced the cusps, which is not " +
+  "always the one requested: inside the polar circles Placidus and Koch are undefined, and " +
+  "Swiss Ephemeris substitutes Porphyry cusps. When that happens `houses.system` is " +
+  "`\"porphyrius\"` and `houses.requestedSystem` records what was asked for; " +
+  "`requestedSystem` is OPTIONAL and its key is absent whenever no substitution occurred. " +
+  "The substitution is detected from the ephemeris return flag, not a latitude threshold — " +
+  "the true boundary tracks the obliquity and moves with the epoch. Regiomontanus and " +
+  "Campanus are defined at every latitude but, above the polar circles and over a window of " +
+  "sidereal time that widens with latitude, the wheel runs BACKWARDS: cusps descend, ten of " +
+  "the twelve houses are hairline-narrow and two span roughly 180°. Bodies are still placed " +
+  "in the house that genuinely contains them and the cusps are exact, but the house numbers " +
+  "are not comparable with a temperate chart's, and `warnings` says so. `equal` and " +
+  "`whole_sign` stay ordered at every latitude.";
+
 export interface OpenAPISpec {
   openapi: string;
   info: Record<string, unknown>;
@@ -60,7 +75,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             content: { "application/json": { schema: { $ref: "#/components/schemas/NatalInput" } } },
           },
           responses: {
-            "200": { description: "Natal chart with planets, houses, aspects, aspect patterns (stellium, grand trine, T-square, grand cross, yod, kite, mystic rectangle), and the chart ruler (ruler of the Ascendant sign with placement + aspects). `partOfFortune` is OPTIONAL: its formula requires both luminaries, so the field is omitted entirely (key absent) when `planets` excludes the Sun or the Moon. Its `isDayBirth` is determined by the Sun's position relative to the horizon and does not vary with `house_system`. " + EPHEMERIS_PROSE },
+            "200": { description: "Natal chart with planets, houses, aspects, aspect patterns (stellium, grand trine, T-square, grand cross, yod, kite, mystic rectangle), and the chart ruler (ruler of the Ascendant sign with placement + aspects). `partOfFortune` is OPTIONAL: its formula requires both luminaries, so the field is omitted entirely (key absent) when `planets` excludes the Sun or the Moon. Its `isDayBirth` is determined by the Sun's position relative to the horizon and does not vary with `house_system`. " + EPHEMERIS_PROSE + " " + HOUSES_PROSE },
             "422": { description: "Invalid input" },
           },
         },
@@ -139,7 +154,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/CompositeInput" } } },
           },
-          responses: { "200": { description: "Natal-style composite chart: midpoint planets with sign + house, derived house wheel, internal aspects, aspect patterns, and the composite chart ruler. `partOfFortune` is OPTIONAL — omitted entirely (key absent) when either luminary is missing from the composite point set — and its sect is read from the composite horizon, so it does not vary with `house_system`." } },
+          responses: { "200": { description: "Natal-style composite chart: midpoint planets with sign + house, derived house wheel, internal aspects, aspect patterns, and the composite chart ruler. `partOfFortune` is OPTIONAL — omitted entirely (key absent) when either luminary is missing from the composite point set — and its sect is read from the composite horizon, so it does not vary with `house_system`. " + HOUSES_PROSE + " The composite wheel is cast at `referenceLatitude`, so it is that latitude — not the birth latitudes — that decides whether a substitution or a reversal happens." } },
         },
       },
       "/api/v1/astrology/progressions": {

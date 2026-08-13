@@ -173,6 +173,29 @@ export interface HousesResult {
   armc: number; // sidereal time (degrees)
   vertex: number;
   equatorialAscendant: number;
+  /**
+   * The house system that actually produced `cusps` — not necessarily the one
+   * requested. Inside the polar circles Placidus and Koch are undefined, and
+   * sweph substitutes Porphyry rather than failing, signalling the swap through
+   * `flag < 0`. That flag used to be discarded, so a caller asking for Placidus
+   * at Tromsø received Porphyry cusps under the name `placidus`. See finding F5
+   * (`docs/chart-conventions.md` §7).
+   */
+  system: HouseSystem;
+  /** What the caller asked for. Differs from `system` only on a substitution. */
+  requestedSystem: HouseSystem;
+}
+
+/**
+ * Systems sweph refuses inside the polar circles, and what it silently
+ * substitutes. The substitution is asserted against an explicit `porphyrius`
+ * request in `tests/polar-houses.test.ts` rather than trusted here, so a change
+ * in sweph's behaviour fails CI instead of quietly relabelling cusps again.
+ */
+const POLAR_SUBSTITUTE: HouseSystem = "porphyrius";
+
+function resolveHouseSystem(requested: HouseSystem, flag: number): HouseSystem {
+  return flag < 0 ? POLAR_SUBSTITUTE : requested;
 }
 
 /**
@@ -308,6 +331,8 @@ export function calcHouses(
     armc: points[2],
     vertex: points[3],
     equatorialAscendant: points[4],
+    system: resolveHouseSystem(system, result.flag),
+    requestedSystem: system,
   };
 }
 
@@ -347,6 +372,8 @@ export function calcHousesFromArmc(
     armc: points[2],
     vertex: points[3],
     equatorialAscendant: points[4],
+    system: resolveHouseSystem(system, result.flag),
+    requestedSystem: system,
   };
 }
 
