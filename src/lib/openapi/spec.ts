@@ -102,7 +102,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           summary: "Sky snapshot — planet positions at a datetime (no natal chart)",
           requestBody: {
             required: true,
-            content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
+            content: { "application/json": { schema: { $ref: "#/components/schemas/TransitSkyInput" } } },
           },
           responses: { "200": { description: "Planet longitudes, signs, HD gates, and sky-wide aspect patterns (sign-based) for the given moment. " + EPHEMERIS_PROSE } },
         },
@@ -112,7 +112,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           summary: "Transit-to-natal overlay: current-sky aspects + HD activations + house overlays for a natal chart",
           requestBody: {
             required: true,
-            content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
+            content: { "application/json": { schema: { $ref: "#/components/schemas/TransitToNatalInput" } } },
           },
           responses: { "200": { description:
                 "Natal chart, transit sky, and overlay (aspects, hdActivations, houseOverlays). Each aspect hit carries `motion`: `\"applying\"`, `\"separating\"`, or `\"stationary\"`. The boolean `applying` is OPTIONAL — omitted (key absent) when the direction is not determinate, i.e. `motion` is `\"stationary\"` or no speed was available for the moving point. `motion` itself is absent in that no-speed case, which is a different claim from `\"stationary\"`: unknown rather than none." } },
@@ -123,7 +123,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           summary: "Scan a date range for transit events (aspect windows + retrograde loops)",
           requestBody: {
             required: true,
-            content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
+            content: { "application/json": { schema: { $ref: "#/components/schemas/TransitEventsInput" } } },
           },
           responses: { "200": { description: "Chronologically sorted array of events, each with orbEnter/orbLeave dates and exact-aspect peaks (multiple for retrograde loops)" } },
         },
@@ -131,6 +131,10 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
       "/api/v1/sky/events": {
         post: {
           summary: "Sky weather feed — retrograde stations, lunations, sign ingresses, and eclipses",
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { $ref: "#/components/schemas/SkyEventsInput" } } },
+          },
           responses: { "200": { description: "Chronologically sorted array of sky events across the requested date range (up to 20 years)" } },
         },
       },
@@ -139,7 +143,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           summary: "Compatibility / connection chart between two people's natal charts",
           requestBody: {
             required: true,
-            content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
+            content: { "application/json": { schema: { $ref: "#/components/schemas/SynastryInput" } } },
           },
           responses: { "200": { description:
                 "Both natal charts plus bidirectional overlays (bOnA and aOnB). Aspect hits carry the same optional `applying` / three-valued `motion` fields as `/api/v1/transit/natal`." } },
@@ -264,7 +268,13 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             longitude: { type: "number", minimum: -180, maximum: 180, example: -74.006 },
           },
         },
-        NatalInput: {
+        // The three natal shapes below mirror the Zod hierarchy in
+        // src/lib/validation/schemas.ts exactly, and they are genuinely
+        // different: an endpoint that takes `NatalHouseOptions` will reject
+        // neither `rulership` nor `planets` — it ignores them — so advertising
+        // the widest shape everywhere would tell consumers those options do
+        // something where they do not.
+        NatalHouseOptions: {
           allOf: [
             { $ref: "#/components/schemas/BirthData" },
             {
@@ -275,15 +285,48 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
                   enum: ["placidus", "koch", "porphyrius", "regiomontanus", "campanus", "equal", "whole_sign"],
                   default: "placidus",
                 },
+              },
+            },
+          ],
+        },
+        /** Birth data + every chart option honored wherever a chart is cast. */
+        NatalChartOptions: {
+          allOf: [
+            { $ref: "#/components/schemas/NatalHouseOptions" },
+            {
+              type: "object",
+              properties: { rulership: { $ref: "#/components/schemas/RulershipConvention" } },
+            },
+          ],
+        },
+        NatalInput: {
+          allOf: [
+            { $ref: "#/components/schemas/NatalChartOptions" },
+            {
+              type: "object",
+              properties: {
                 planets: {
                   type: "array",
                   items: { type: "string" },
                   description: "Optional subset of planets to compute",
                 },
-                rulership: { $ref: "#/components/schemas/RulershipConvention" },
               },
             },
           ],
+        },
+        AspectFilter: {
+          type: "array",
+          items: {
+            type: "string",
+            enum: ["conjunction", "sextile", "square", "trine", "quincunx", "opposition"],
+          },
+          description:
+            "Optional subset of aspect types to report. Omit for all six. This narrows WHICH aspects are searched for; `orbs` controls how wide each one's window is.",
+        },
+        PlanetFilter: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional subset of planets. Omit for the full set.",
         },
         RulershipConvention: {
           type: "string",
@@ -296,10 +339,84 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           type: "object",
           required: ["natal", "transit_datetime", "transit_timezone"],
           properties: {
-            natal: { $ref: "#/components/schemas/NatalInput" },
+            natal: { $ref: "#/components/schemas/NatalHouseOptions" },
             transit_datetime: { type: "string", example: "2026-05-15T12:00:00" },
             transit_timezone: { type: "string", example: "UTC" },
-            planets: { type: "array", items: { type: "string" } },
+            planets: { $ref: "#/components/schemas/PlanetFilter" },
+            orbs: { $ref: "#/components/schemas/OrbOverride" },
+          },
+        },
+        TransitSkyInput: {
+          type: "object",
+          required: ["datetime", "timezone"],
+          description:
+            "A moment, not a birth. This endpoint reads the sky itself, so it takes no coordinates — houses need an observer and there is no observer here.",
+          properties: {
+            datetime: { type: "string", example: "2026-05-15T12:00:00" },
+            timezone: { type: "string", example: "UTC" },
+            planets: { $ref: "#/components/schemas/PlanetFilter" },
+          },
+        },
+        TransitToNatalInput: {
+          type: "object",
+          required: ["natal", "transit_datetime", "transit_timezone"],
+          properties: {
+            natal: { $ref: "#/components/schemas/NatalChartOptions" },
+            transit_datetime: { type: "string", example: "2026-05-15T12:00:00" },
+            transit_timezone: { type: "string", example: "UTC" },
+            transit_planets: { $ref: "#/components/schemas/PlanetFilter" },
+            aspects: { $ref: "#/components/schemas/AspectFilter" },
+            orbs: { $ref: "#/components/schemas/OrbOverride" },
+          },
+        },
+        TransitEventsInput: {
+          type: "object",
+          required: ["natal", "start_date", "end_date"],
+          properties: {
+            natal: { $ref: "#/components/schemas/NatalHouseOptions" },
+            start_date: { type: "string", example: "2026-01-01" },
+            end_date: { type: "string", example: "2026-12-31" },
+            transit_planets: { $ref: "#/components/schemas/PlanetFilter" },
+            natal_points: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "Optional subset of natal points to scan against — planets plus the angles, South Node, Vertex, and Part of Fortune.",
+            },
+            aspects: { $ref: "#/components/schemas/AspectFilter" },
+            orbs: { $ref: "#/components/schemas/OrbOverride" },
+            step_days: {
+              type: "integer",
+              minimum: 1,
+              maximum: 30,
+              description:
+                "Sampling interval for the scan. Coarser steps are faster but can step over a short window entirely.",
+            },
+          },
+        },
+        SkyEventsInput: {
+          type: "object",
+          required: ["start_date", "end_date"],
+          description: "Birth-independent: the sky's own calendar over a range of up to 20 years.",
+          properties: {
+            start_date: { type: "string", example: "2026-01-01" },
+            end_date: { type: "string", example: "2026-12-31" },
+            categories: {
+              type: "array",
+              items: { type: "string", enum: ["retrograde", "lunation", "ingress", "eclipse"] },
+              description: "Optional subset of event categories. Omit for all four.",
+            },
+            retrograde_planets: { $ref: "#/components/schemas/PlanetFilter" },
+            ingress_planets: { $ref: "#/components/schemas/PlanetFilter" },
+          },
+        },
+        SynastryInput: {
+          type: "object",
+          required: ["personA", "personB"],
+          properties: {
+            personA: { $ref: "#/components/schemas/NatalChartOptions" },
+            personB: { $ref: "#/components/schemas/NatalChartOptions" },
+            aspects: { $ref: "#/components/schemas/AspectFilter" },
             orbs: { $ref: "#/components/schemas/OrbOverride" },
           },
         },
@@ -349,7 +466,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           type: "object",
           required: ["natal", "year"],
           properties: {
-            natal: { $ref: "#/components/schemas/NatalInput" },
+            natal: { $ref: "#/components/schemas/NatalChartOptions" },
             year: { type: "integer", minimum: 1500, maximum: 3500, example: 2026 },
             relocation: {
               type: "object",
@@ -367,7 +484,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           type: "object",
           required: ["natal", "planet"],
           properties: {
-            natal: { $ref: "#/components/schemas/NatalInput" },
+            natal: { $ref: "#/components/schemas/NatalChartOptions" },
             planet: {
               type: "string",
               enum: ["sun", "mercury", "venus", "mars", "jupiter", "saturn"],
@@ -426,6 +543,17 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           type: "object",
           required: ["date"],
           properties: { date: { type: "string", example: "1990-08-22" } },
+        },
+        // /api/v1/geocode has always $ref'd this name; the component itself was
+        // never written, so the reference dangled and Swagger UI had no body
+        // schema to render for the endpoint.
+        GeocodeInput: {
+          type: "object",
+          required: ["query"],
+          properties: {
+            query: { type: "string", minLength: 2, maxLength: 200, example: "Sandringham, Norfolk" },
+            limit: { type: "integer", minimum: 1, maximum: 10, default: 5, description: "Maximum matches to return" },
+          },
         },
       },
     },
