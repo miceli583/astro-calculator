@@ -15,7 +15,7 @@ Foundational calculator API. Goal: every system has a working endpoint.
 - [x] OpenAPI 3.1 spec + Swagger UI
 - [x] Reference test fixtures (Diana, Einstein, Jobs)
 - [x] Interactive `/chart` UI
-- [ ] Deploy to Vercel
+- [x] Deploy to Vercel — verified 2026-07-08 (all endpoints return JSON in production)
 
 ## Phase 2 — Production hardening
 

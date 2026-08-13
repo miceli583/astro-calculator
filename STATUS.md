@@ -1,7 +1,7 @@
 # Status
 
 **Last updated:** 2026-08-13
-**Last updated by:** Claude PM (accuracy harness — 11 findings, all 9 actionable ones fixed)
+**Last updated by:** Claude PM (orbs-override parity on `/api/v1/astrology/transits`, shipped to prod)
 
 ## What works
 
@@ -14,7 +14,7 @@
   - **Gene Keys (Hologenetic Profile)** — all 11 official spheres across Activation/Venus/Pearl sequences (verified against genekeys.com)
   - **Life Path** (Pythagorean numerology) and **Destiny Card** (Robert Lee Camp Solar Spread, verified against the published chart)
   - **Returns** — solar return for any year, plus Sun/Mercury/Venus/Mars/Jupiter/Saturn first-return-on-or-after any datetime, both optionally relocated; **secondary progressions** ("day for a year") for inner planets
-  - **Transits** — sky snapshot, transit-to-natal overlay, and multi-year event scanner with retrograde-loop detection
+  - **Transits** — sky snapshot, transit-to-natal overlay, and multi-year event scanner with retrograde-loop detection; all three take a per-aspect `orbs` override, **merged over** the defaults rather than replacing the table
   - **Synastry** — chart-to-chart compatibility built on the shared `computeOverlay` core
   - **Composite** — midpoint chart from 2–10 births (circular-mean planets, houses derived from composite MC, PoF, internal aspects)
   - **Full transit combination matrix** — 13 transit × 19 natal points × 6 aspects with sign/house context on both sides; every aspect hit carries a stable `comboKey`; 17,784-key manifest (v2) + canonical `transit-matrix.ts` module
@@ -32,8 +32,8 @@
     against their *defining geometry*, not another implementation; local time → UT → JD audited end to end
   - **L3 interpretive conventions** (`docs/aspect-conventions.md`) — orb tables, rulerships, aspect-window
     non-overlap and the pattern set pinned as goldens. No external truth exists here, so the doc is the contract
-- **1355/1355 unit tests passing** across 33 files: 459 L1 ephemeris vs JPL Horizons; 253 L2 house-definition
-  plus a 20-test polar-wheel suite sweeping ARMC through a full sidereal day; 64 L2 time-layer, 43 L3
+- **1359/1359 unit tests passing** across 33 files: 459 L1 ephemeris vs JPL Horizons; 253 L2 house-definition
+  plus a 20-test polar-wheel suite sweeping ARMC through a full sidereal day; 64 L2 time-layer, 47 L3
   convention, 17 ephemeris-fallback, 7 version single-source; 36 planet-position vs Astrodienst (Diana, Jobs,
   Mandela) and 11 Sun cross-checks vs independent Meeus VSOP; 51 astrocartography, 38 HD structural, 12 Gene
   Keys, 18 Destiny Card, 12 progression/return, 21 composite, 16 transit-matrix
@@ -68,8 +68,7 @@ The accuracy harness produced 11 findings (F1–F11). **All nine actionable ones
 
 ## Next
 
-- ~~Vercel deploy + ephemeris bundle verification~~ — verified 2026-07-08, all endpoints return JSON in production
-- ~~Composite midpoint chart endpoint~~ — shipped 2026-07-24 (2–10 charts); Davison variant still deferred
+- Davison chart variant (midpoint composite shipped 2026-07-24)
 - Cards of Destiny Planetary Ruling Card + Karma Cards (needs reference table)
 - Topocentric flag (Moon precision; concurrency design needed for sweph's global `set_topo`)
 - Sidereal zodiac with selectable ayanamsa
@@ -78,6 +77,7 @@ The accuracy harness produced 11 findings (F1–F11). **All nine actionable ones
 
 | Date       | Author          | Change                                                                                                                                           |
 | ---------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-08-13 | Claude PM       | **`orbs` override on `/api/v1/astrology/transits` (PR #22 → dev, PR #23 → main; live on prod)** — closes the parity gap carved out of the F9 fix, since adding a request field is a contract change rather than a correction. `transitInputSchema` gains `orbs`, and `calculateTransits` merges it over `DEFAULT_TRANSIT_ORBS` exactly as `computeOverlay` does for `/transit/natal` and `/synastry` — the two parity references agree with each other, differing only in which default table they merge over, so no third shape had to be adjudicated. **Merge, not replace**: `{conjunction: 9}` widens conjunctions and leaves the other five aspects on their defaults. Shipped red-first: the acceptance test asserts a custom table actually *changes the hit count* in both directions and that widening never drops a hit, because a test that only proves the field is accepted proves nothing. Measured on prod (Diana natal / 2026-08-12): default **18** hits, all-9° **86**, all-0.5° **2**, `{conjunction: 9}` **25** (conjunctions 3→10, others unchanged); orb 16 and −1 both `422`. Two latent problems found on the way: `orbOverrideSchema` was declared *below* `transitInputSchema`, so referencing it would have been a module-load TDZ error, not a forward reference (hoisted with a comment saying why); and the two transit paths scan the aspect table in different orders and both `break` on first match, which is only safe because the schema's 15° cap is exactly half the 30° minimum gap between exact aspect angles — that property is now pinned by a test rather than left as a coincidence. Two out-of-scope gaps filed as cards (`t_3176e10d`, `t_a02c9654`) instead of folded in. 1355 → 1359 tests |
 | 2026-08-13 | Claude PM       | **Escalation fixes F1/F2 and F5/F6 (PRs #20, #21 → dev; main untouched)** — closes the last four actionable accuracy findings. Pre-1800 births returned a 500 because `calcPlanet` threw on any non-empty `out.error`, but sweph uses that field for *warnings* too and signals real failure via `flag < 0`; now gated on the flag, and every response naming positions carries **`ephemeris`** (`swiss`/`moshier`/`jpl`/`mixed`). `sepl_12.se1` deliberately not shipped — a labelled fallback is not a downgrade in disguise (F1). Chiron, which genuinely has no ephemeris before 1800, is reported in an optional **`unavailableBodies`** array instead of taking the whole chart down (F2). `calcHouses` discarded sweph's return flag, so Porphyry cusps substituted inside the polar circles came back labelled `placidus`; responses now carry **`houses.system`** and, on a substitution, `houses.requestedSystem`. The 66.5° constant was **removed from the decision** rather than corrected: the true boundary tracks the obliquity (66.532697° in 1800 → 66.577351° in ≈2333), so no constant can be right (F5). The wheel that put all 13 bodies in house 1 turned out to be running **retrograde**, not merely collapsed — measured across a full sidereal day at 7 latitudes × 7 systems, all 4186 degenerate instants close to exactly 360° read backwards; `houseSpans` now measures direction instead of assuming it, and two plausible alternative fixes were rejected with measurements rather than argument (F6). Both PRs proven **red-first**; each fix broke the characterization test that had been written to assert the defect, exactly as designed. `houseFor` existed in two files and was consolidated. 1314 → 1355 tests, no fixture rewritten |
 | 2026-08-13 | Claude PM       | **Escalation fixes F7–F11 (PRs #17, #18, #19 → dev; main untouched)**: sect now computed from the horizon (`(ASC − Sun) mod 360 < 180`) rather than the Sun's house number, so it no longer varies with `house_system` — before the fix, Placidus said day and whole-sign said night for the same Kolkata 1972 birth and the Part of Fortune moved **135°** (F7); `partOfFortune` is now **omitted entirely** (key absent, not `null`, not present-and-undefined) when the `planets` subset excludes a luminary, instead of silently returning the Ascendant's longitude (F8); both transit paths now read the same orb table — `/api/v1/astrology/transits` went **54 hits → 18**, matching `/api/v1/transit/natal` exactly, the root cause being an import cycle that put `DEFAULT_TRANSIT_ORBS` out of reach, so both tables moved to `src/lib/constants/orbs.ts` (F9); `applying` is now computed from relative motion and the representation is three-valued — `motion` is `applying`/`separating`/`stationary` and the boolean is **omitted** when stationary, with the tolerance (1e-4°/day) measured over 1304 aspecting pairs rather than chosen by feel (F10); the tautological `true_node`/`south_node` opposition at orb 0.00 is suppressed narrowly, with every other South Node aspect kept (F11). Every fix was proven **red-first** by swapping the changed sources for their `dev` versions with the new tests kept — exactly the intended failures, nothing else moving. Conventions promoted to `docs/aspect-conventions.md` §1.3/§1.5/§1.7/§4.2; OpenAPI response prose updated (the spec carries no response schemas, so prose is the only contract surface). Three factual corrections to the original filings recorded inline, since they were claims a public doc made about a public API. 1314/1314, no fixture rewritten |
 | 2026-08-13 | Claude PM       | **Accuracy harness — three oracle tiers (PRs #15, #16 → dev)**: L1 anchors ephemeris positions to **JPL Horizons**, the project's first oracle that does not itself run Swiss Ephemeris; 20 hostile fixtures (arctic, antimeridian, DST gaps/ambiguities, 45- and 30-minute zones, pre-Gregorian clocks) harvested **offline** so no CI job depends on a live third-party API; all eight well-determined bodies agree to **0.005″ RMS** over 1800–2005, with the residual floor traced to a frame rotation rather than per-body error. L2 checks house cusps against their defining geometry and audits the local-time → UT → JD pipeline; L3 pins the interpretive conventions (orb tables, rulerships, aspect-window non-overlap, pattern set) as goldens. Four normative docs added: `accuracy.md`, `time-conventions.md`, `chart-conventions.md`, `aspect-conventions.md`. Produced findings **F1–F11**. Separately, `info.version` in the OpenAPI spec and `/api/health` were hard-coded and had drifted two releases behind `package.json`; both now import `API_VERSION` from `src/lib/version.ts`, with a test rejecting a semver literal reappearing on any surface. 491 → 1314 tests |
@@ -95,6 +95,6 @@ The accuracy harness produced 11 findings (F1–F11). **All nine actionable ones
 - Above the polar circles, Placidus and Koch are undefined and Regiomontanus/Campanus wheels can run
   retrograde — both now reported rather than hidden, but `equal` and `whole_sign` are the only systems
   that stay ordered at every latitude
-- `/api/v1/astrology/transits` accepts no `orbs` override where `/api/v1/transit/natal` and
-  `/api/v1/synastry` do — parity gap found while fixing F9, deliberately not folded into that fix
-  since adding a request field is a contract change rather than a correction
+- OpenAPI declares `BirthData` as the request body for `/api/v1/transit/natal` and `/api/v1/synastry`,
+  which is wrong for both, and neither operation documents its `orbs`/`aspects` options — carded
+  `t_3176e10d`
