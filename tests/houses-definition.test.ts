@@ -28,7 +28,7 @@ import {
   type HouseSystem,
   type HousesResult,
 } from "@/lib/ephemeris/client";
-import { calculateNatalChart } from "@/lib/calculators/astrology";
+import { calculateNatalChart, houseSpans, wheelDirection } from "@/lib/calculators/astrology";
 
 const FIXTURE_DIR = join(process.cwd(), "tests/fixtures/horizons");
 
@@ -720,33 +720,53 @@ describe("L2 degeneracy — the polar boundary, asserted rather than avoided", (
     }
   });
 
-  it("F6: the collapse puts every body in house 1, which is the actual defect", () => {
-    // §5's half-open [cusp_k, cusp_{k+1}) rule assumes the cusps run forward.
-    // Collapsed, house 1 spans −0.03°; read forward that is 359.97°, so it
-    // swallows the whole zodiac and houses 2–12 are unreachable. The API does
-    // warn about polar degeneracy, but "may be unreliable" understates a chart
-    // in which every body is in the first house.
+  it("F6: the collapsed wheel is reversed, and reading it that way places bodies correctly", () => {
+    // §5's half-open [cusp_k, cusp_{k+1}) rule assumed the cusps run forward.
+    // They do not here: collapsed, they DESCEND. Read forward, house 1 spans
+    // −0.03° as 359.97°, swallows the zodiac, and every body in the chart came
+    // back in house 1. Read in the direction that actually closes the wheel,
+    // the twelve arcs sum to exactly 360° and each body lands in one of them.
     const chart = calculateNatalChart({ ...COLLAPSED, house_system: "regiomontanus" });
-    const houses = new Set(chart.planets.map((p) => p.house));
-    expect(
-      [...houses],
-      "bodies are no longer all in house 1 — F6 may be fixed; update this test"
-    ).toEqual([1]);
-
-    // And the assignment is demonstrably wrong, not merely suspicious: bodies
-    // sit inside the one genuinely wide house, which is not house 1.
     const cusps = chart.houses.cusps.map((c) => c.longitude);
-    const widest = cusps.reduce(
-      (best, _, i) => (n360(cusps[(i + 1) % 12] - cusps[i]) > best.w
-        ? { h: i + 1, w: n360(cusps[(i + 1) % 12] - cusps[i]) } : best),
-      { h: 0, w: 0 }
-    );
-    expect(widest.w, "no house spans a large arc, so the mis-assignment claim is untested")
-      .toBeGreaterThan(150);
-    const misplaced = chart.planets.filter(
-      (p) => n360(p.longitude - cusps[widest.h - 1]) < widest.w && p.house !== widest.h
-    );
-    expect(misplaced.length, "no body is mis-assigned").toBeGreaterThan(0);
+    expect(wheelDirection(cusps)).toBe("reversed");
+
+    const houses = new Set(chart.planets.map((p) => p.house));
+    expect([...houses].sort((a, b) => a - b)).toEqual([3, 9]);
+
+    // The wheel closes exactly once — this is the arithmetic the forward
+    // reading got wrong, where the twelve arcs wound the circle eleven times.
+    const spans = houseSpans(cusps);
+    expect(spans.reduce((a, s) => a + s.extent, 0)).toBeCloseTo(360, 6);
+
+    // Nearly all of the circle belongs to a handful of wide houses; the rest
+    // are hairline, which is why only two house numbers appear above.
+    const wide = spans.filter((s) => s.extent > 1);
+    expect(wide.length).toBeGreaterThanOrEqual(2);
+    expect(wide.reduce((a, s) => a + s.extent, 0)).toBeGreaterThan(359);
+
+    // Every body sits inside the house it is reported in — the assertion that
+    // was false before, when nine bodies sat in house 3's arc labelled house 1.
+    for (const p of chart.planets) {
+      const { start, extent } = spans[p.house - 1];
+      expect(n360(p.longitude - start), `${p.name} outside house ${p.house}`).toBeLessThan(extent);
+    }
+
+    // House 9, not house 3, is where the Moon and Jupiter live. Reversing the
+    // wheel reverses the numbering (house k ↔ 2−k mod 12), so the arc a
+    // forward reading would have called house 3 is house 9. Cross-checked
+    // against whole_sign at the same instant, which puts the Moon in house 5:
+    // 2−5 = 9 (mod 12).
+    const moon = chart.planets.find((p) => p.name === "moon")!;
+    const jupiter = chart.planets.find((p) => p.name === "jupiter")!;
+    expect(moon.longitude).toBeCloseTo(163.98, 1);
+    expect(jupiter.longitude).toBeCloseTo(93.4, 1);
+    expect(moon.house).toBe(9);
+    expect(jupiter.house).toBe(9);
+  });
+
+  it("F6: the caller is told the wheel is reversed", () => {
+    const chart = calculateNatalChart({ ...COLLAPSED, house_system: "regiomontanus" });
+    expect(chart.warnings.some((w) => w.includes("runs backwards"))).toBe(true);
   });
 
   it("F6: below the polar circle the wheel is ordered at EVERY sidereal time", () => {

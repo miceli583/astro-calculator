@@ -79,7 +79,16 @@ export interface NatalChart {
   jd_ut: number;
   planets: NatalPlanet[];
   houses: {
+    /**
+     * The house system that actually produced these cusps. Above the polar
+     * circle Placidus and Koch are undefined and the ephemeris substitutes
+     * Porphyry; this field reports the substitute, because reporting the
+     * request would be a false label on exact cusps of a different system.
+     * See finding F5.
+     */
     system: HouseSystem;
+    /** Present only when a substitution happened — then this is what was asked for. */
+    requestedSystem?: HouseSystem;
     cusps: { house: number; longitude: number; sign: SignPosition }[];
     ascendant: { longitude: number; sign: SignPosition };
     midheaven: { longitude: number; sign: SignPosition };
@@ -302,14 +311,94 @@ function motionFields(motion: AspectMotion): { applying?: boolean; motion: Aspec
     : { applying: motion === "applying", motion };
 }
 
-function houseFor(longitude: number, cusps: number[]): number {
-  // cusps[i] is the start of house i+1. Houses wrap around 360°.
+/**
+ * The signed extent of each of the twelve houses, in degrees.
+ *
+ * For an ordinary chart this is just `cusps[i+1] − cusps[i]` taken forward
+ * around the circle, and the twelve add up to exactly 360.
+ *
+ * Above the polar circle they do not. Campanus and Regiomontanus cusps collapse
+ * onto two points 180° apart, and the wheel becomes locally *retrograde*: cusp
+ * i+1 sits a hundredth of a degree BEHIND cusp i. Read forward, that hair-thin
+ * house measures 359.97° instead of 0.03°, and the naive twelve then sum to
+ * 360 × k for k up to 11. Measured at 69.65°N, ARMC 239°, Campanus:
+ *
+ *   cusps  60.95 | 241.24  241.16  241.13  241.11  241.09 | 240.95 | 61.24 …
+ *   naive  180.28  359.92  359.98  359.98  359.97  359.87   180.28  359.92 …
+ *   sum    3960 = 360 × 11
+ *
+ * Ten of those twelve arcs are spurious. Exactly which ten is fixed by
+ * arithmetic — the sum overshoots by 360 × (k−1), so k−1 arcs must be the
+ * negative representative — and *which* ten is fixed by physics: the spurious
+ * ones are the arcs nearest 360°, i.e. the ones that are really tiny negatives.
+ * Flipping the largest k−1 turns them into −0.08, −0.03, −0.02, −0.03, −0.13 …
+ * and the total falls back to exactly 360.
+ *
+ * Flipping largest-first rather than blindly normalising into (−180, 180] also
+ * keeps genuinely oversized houses intact: the two real houses above measure
+ * 180.28° each, and a (−180, 180] normalisation would wrongly zero both.
+ */
+/** One house as an arc: where it starts, and how far it runs counterclockwise. */
+export interface HouseSpan {
+  start: number;
+  extent: number;
+}
+
+/**
+ * The twelve houses as arcs of the zodiac (finding F6).
+ *
+ * A house is the arc between its own cusp and the next one, but *which* of the
+ * two arcs between them is not always the forward one. Above the polar circles
+ * the house wheel runs **backwards**: cusp 2 sits clockwise of cusp 1, cusp 3
+ * clockwise of cusp 2, and so on all the way round. Measured forward, eleven of
+ * the twelve arcs then come out just under 360° instead of just over 0°, house
+ * 1 alone claims the whole zodiac, and every body in the chart is reported
+ * inside it — which is exactly what this function exists to prevent.
+ *
+ * Direction is not guessed, it is measured. A wheel's twelve arcs must close
+ * the circle exactly once, so the direction whose arcs sum to 360° is the real
+ * one. Swept across a full sidereal day at seven latitudes and seven house
+ * systems, every one of 4186 degenerate instants summed to 360×11 forward and
+ * to exactly 360 backward — the wheel is reversed, not broken, and the cusps
+ * themselves are correct to within 1e-10 arcsec.
+ */
+export function wheelDirection(cusps: number[]): "direct" | "reversed" {
+  return houseSpans(cusps)[0].start === cusps[0] ? "direct" : "reversed";
+}
+
+export function houseSpans(cusps: number[]): HouseSpan[] {
+  const forward = cusps.map((start, i) => ({
+    start,
+    extent: (((cusps[(i + 1) % 12] - start) % 360) + 360) % 360,
+  }));
+  const closes = (spans: HouseSpan[]) =>
+    Math.abs(spans.reduce((a, s) => a + s.extent, 0) - 360) < 1e-6;
+  if (closes(forward)) return forward;
+
+  // Retrograde wheel: house i runs from the *next* cusp forward to its own.
+  const backward = cusps.map((end, i) => {
+    const start = cusps[(i + 1) % 12];
+    return { start, extent: (((end - start) % 360) + 360) % 360 };
+  });
+  // If neither direction closes the circle the cusps are not a wheel at all;
+  // forward is the conventional reading and still beats throwing a chart away.
+  return closes(backward) ? backward : forward;
+}
+
+/**
+ * Which house a longitude falls in.
+ *
+ * Membership is `offset < extent`, both measured counterclockwise from the
+ * house's own start — never a comparison of raw cusp values, which assumes the
+ * cusps ascend and so mis-reads every reversed polar wheel (finding F6).
+ */
+export function houseFor(longitude: number, cusps: number[]): number {
   const norm = ((longitude % 360) + 360) % 360;
+  const spans = houseSpans(cusps);
   for (let i = 0; i < 12; i++) {
-    const start = cusps[i];
-    const end = cusps[(i + 1) % 12];
-    const inHouse = end > start ? norm >= start && norm < end : norm >= start || norm < end;
-    if (inHouse) return i + 1;
+    if (spans[i].extent <= 0) continue;
+    const offset = (((norm - spans[i].start) % 360) + 360) % 360;
+    if (offset < spans[i].extent) return i + 1;
   }
   return 1;
 }
@@ -457,11 +546,42 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
       `(daylight time); the second is one hour later and gives a different chart.`
     );
   }
-  if (Math.abs(input.latitude) >= HIGH_LATITUDE_THRESHOLD && QUADRANT_SYSTEMS.has(houseSystem)) {
+  // Driven by sweph's return flag, not by a latitude constant. The substitution
+  // boundary is not 66.5° and is not even fixed: it tracks the obliquity of the
+  // ecliptic, measured at 66.5327° in 1800, 66.5623° in 2000 and 66.5774° in
+  // 2333. A hardcoded 66.5 warned on charts sweph computes real Placidus cusps
+  // for, and would drift further wrong with every century. See finding F5.
+  if (houses.system !== houses.requestedSystem) {
     warnings.push(
-      `Latitude ${input.latitude.toFixed(2)}° is at or beyond the polar circle; ` +
-      `${houseSystem} house cusps are mathematically degenerate above ~66.5° and ` +
-      `may be unreliable. Consider whole_sign or equal house systems for polar charts.`
+      `Latitude ${input.latitude.toFixed(2)}° is beyond the polar circle, where ` +
+      `${houses.requestedSystem} house cusps are undefined. These are ` +
+      `${houses.system} cusps, which is what the ephemeris substituted — they are ` +
+      `exact for that system, not unreliable ${houses.requestedSystem} ones. ` +
+      `Consider whole_sign or equal house systems for polar charts.`
+    );
+  } else if (Math.abs(input.latitude) >= HIGH_LATITUDE_THRESHOLD && QUADRANT_SYSTEMS.has(houseSystem)) {
+    warnings.push(
+      `Latitude ${input.latitude.toFixed(2)}° is at or beyond the polar circle. ` +
+      `${houseSystem} cusps are still defined here, but houses become extremely ` +
+      `unequal and some may collapse to near-zero width. Consider whole_sign or ` +
+      `equal house systems for polar charts.`
+    );
+  }
+
+  // A reversed wheel is not an error, but it IS surprising: the house numbers
+  // run clockwise, so house 1 ends at the Ascendant instead of beginning there
+  // and a body a temperate chart would place in house 5 lands near house 9.
+  // Saying so costs a sentence; leaving the caller to discover it from the
+  // numbers is the same kind of silence F5 was about. See finding F6.
+  if (wheelDirection(houses.cusps) === "reversed") {
+    warnings.push(
+      `At latitude ${input.latitude.toFixed(2)}° the ecliptic lies close to the plane ` +
+      `of the horizon at this moment, so the ${houses.system} house wheel runs ` +
+      `backwards: cusps descend rather than ascend, ten of the twelve houses are ` +
+      `hairline-narrow, and two span roughly 180° each. The cusps are exact and every ` +
+      `body is placed in the house that genuinely contains it, but house numbers here ` +
+      `are not comparable with those from a temperate chart. Consider whole_sign or ` +
+      `equal, which stay ordered at every latitude.`
     );
   }
 
@@ -528,7 +648,12 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
     jd_ut: jd,
     planets,
     houses: {
-      system: houseSystem,
+      // The system that produced these cusps, which above the polar circle is
+      // not always the one requested (F5).
+      system: houses.system,
+      ...(houses.system !== houses.requestedSystem
+        ? { requestedSystem: houses.requestedSystem }
+        : {}),
       cusps: houses.cusps.map((cusp, i) => ({
         house: i + 1,
         longitude: cusp,

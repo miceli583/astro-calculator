@@ -12,7 +12,13 @@
 //      a channel in transit or connection charts).
 //   3. House overlays — which of A's houses each of B's points falls into.
 
-import { aspectMotion, longitudeToSign, type AspectMotion, type NatalChart } from "./astrology";
+import {
+  aspectMotion,
+  houseFor,
+  longitudeToSign,
+  type AspectMotion,
+  type NatalChart,
+} from "./astrology";
 import { longitudeToGate } from "../constants/hd-gates";
 import {
   ASPECT_ANGLES,
@@ -303,14 +309,12 @@ export function angularDifference(a: number, b: number): number {
   return Math.abs(((a - b + 540) % 360) - 180);
 }
 
-/** House (1-12) that a longitude falls into given 12 house cusps. */
-export function houseFor(longitude: number, cusps: number[]): number {
-  const norm = ((longitude % 360) + 360) % 360;
-  for (let i = 0; i < 12; i++) {
-    const start = cusps[i];
-    const end = cusps[(i + 1) % 12];
-    const inHouse = end > start ? norm >= start && norm < end : norm >= start || norm < end;
-    if (inHouse) return i + 1;
-  }
-  return 1;
-}
+/**
+ * House (1-12) that a longitude falls into given 12 house cusps.
+ *
+ * Re-exported from `astrology.ts` rather than reimplemented. This file used to
+ * carry its own copy comparing raw cusp values, so the polar-wheel bug (F6) had
+ * to be found and fixed twice — once for natal charts and once for every
+ * overlay, composite and transit that reports a house.
+ */
+export { houseFor };
