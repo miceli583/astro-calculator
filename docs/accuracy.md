@@ -16,7 +16,7 @@ This calculator has four layers, and only two of them have a ground truth:
 | **L0** | wall clock → UT → JD | IANA tz database, Meeus (1998) ch. 7 | Yes — see `time-conventions.md` |
 | **L1** | ephemeris positions | **JPL Horizons** | Yes — this document |
 | **L2** | chart construction (houses, angles) | the **defining geometry** of each system, pinned first | Yes — see `chart-conventions.md` |
-| **L3** | interpretation (orbs, patterns, rulerships) | none exists | No — the conventions doc *is* the deliverable |
+| **L3** | interpretation (orbs, patterns, rulerships) | none exists | No — see `aspect-conventions.md`; the doc *is* the deliverable |
 
 A comparison against another astrology site is **consistency**, never verification:
 that site has the same four layers and the same freedom in L2 and L3. Nothing in
@@ -444,7 +444,10 @@ tested and agree, and that is the main outcome of this tier:
 - **House cusps, angles, and anything latitude-dependent.** L2 — now landed, see
   `chart-conventions.md`. Two findings there (F5, F6) concern how a correct
   computation is labelled and shaped on the way out at polar latitudes.
-- **Aspects, orbs, patterns, rulerships.** L3 — no ground truth exists; the
-  conventions document is the deliverable.
+- **Aspects, orbs, patterns, rulerships.** L3 — now landed, see
+  `aspect-conventions.md`. No ground truth exists at that layer, so the
+  conventions document is the deliverable and the tests pin it rather than
+  verify it. Five findings there (F7–F11): sect coupled to the requested house
+  system, a fabricated Part of Fortune, and three defects on `/api/v1/transit`.
 - **Whether the recorded birth time is the true one.** Dominant real-world error
   source, invisible to every tier here.
