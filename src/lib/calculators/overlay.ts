@@ -289,7 +289,13 @@ export function buildNatalOverlayPoints(chart: NatalChart): OverlayPoint[] {
     { name: "ic", longitude: (mc + 180) % 360, speed: 0 },
     { name: "dsc", longitude: (asc + 180) % 360, speed: 0 },
     { name: "vertex", longitude: chart.houses.vertex.longitude, speed: 0 },
-    { name: "part_of_fortune", longitude: chart.partOfFortune.longitude, speed: 0 },
+    // The Part of Fortune is omitted from the chart when a luminary is absent
+    // from the requested subset (F8), and drops out of the overlay with it —
+    // rather than being replaced by a placeholder that would generate aspect
+    // hits against a point that was never computed.
+    ...(chart.partOfFortune
+      ? [{ name: "part_of_fortune", longitude: chart.partOfFortune.longitude, speed: 0 }]
+      : []),
   ];
 }
 

@@ -1106,7 +1106,9 @@ function AstrologyCard({ chart }: { chart: NatalChart }) {
         <KV k="Ascendant" v={fmtSign(chart.houses.ascendant)} mono />
         <KV k="Midheaven (MC)" v={fmtSign(chart.houses.midheaven)} mono />
         <KV k="Vertex" v={fmtSign(chart.houses.vertex)} mono />
-        <KV k="Part of Fortune" v={`${fmtSign(chart.partOfFortune)} · H${chart.partOfFortune.house}`} mono />
+        {chart.partOfFortune && (
+          <KV k="Part of Fortune" v={`${fmtSign(chart.partOfFortune)} · H${chart.partOfFortune.house}`} mono />
+        )}
       </div>
       <details style={{ marginTop: "1rem" }}>
         <summary style={{ cursor: "pointer", color: "var(--muted)", fontSize: 13 }}>
@@ -1231,7 +1233,9 @@ function SolarReturnCard({ sr }: { sr: SolarReturnChart }) {
       <KV k="Return Moon" v={`${fmtSign(moon)} · H${moon.house}`} mono />
       <KV k="Return ASC" v={fmtSign(sr.houses.ascendant)} mono />
       <KV k="Return MC" v={fmtSign(sr.houses.midheaven)} mono />
-      <KV k="Return Part of Fortune" v={`${fmtSign(sr.partOfFortune)} · H${sr.partOfFortune.house}`} mono />
+      {sr.partOfFortune && (
+        <KV k="Return Part of Fortune" v={`${fmtSign(sr.partOfFortune)} · H${sr.partOfFortune.house}`} mono />
+      )}
       <div style={{ marginTop: "0.5rem", fontSize: 12, color: "var(--muted)" }}>
         {sr.relocated ? "Relocated chart." : "Cast at natal location (default)."}
       </div>

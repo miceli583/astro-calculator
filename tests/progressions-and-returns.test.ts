@@ -12,21 +12,22 @@ describe("Part of Fortune", () => {
   const chart = calculateNatalChart(DIANA.birth);
 
   it("Part of Fortune is present with sign + house", () => {
-    expect(chart.partOfFortune).toBeDefined();
-    expect(chart.partOfFortune.longitude).toBeGreaterThanOrEqual(0);
-    expect(chart.partOfFortune.longitude).toBeLessThan(360);
-    expect(chart.partOfFortune.house).toBeGreaterThanOrEqual(1);
-    expect(chart.partOfFortune.house).toBeLessThanOrEqual(12);
+    const pof = chart.partOfFortune;
+    expect(pof, "a full chart has both luminaries, so the field is present").toBeDefined();
+    expect(pof!.longitude).toBeGreaterThanOrEqual(0);
+    expect(pof!.longitude).toBeLessThan(360);
+    expect(pof!.house).toBeGreaterThanOrEqual(1);
+    expect(pof!.house).toBeLessThanOrEqual(12);
   });
 
   it("Day formula = ASC + Moon - Sun; Night formula = ASC + Sun - Moon", () => {
     const sun = chart.planets.find((p) => p.name === "sun")!;
     const moon = chart.planets.find((p) => p.name === "moon")!;
     const asc = chart.houses.ascendant.longitude;
-    const expected = chart.partOfFortune.isDayBirth
+    const expected = chart.partOfFortune!.isDayBirth
       ? ((asc + moon.longitude - sun.longitude) % 360 + 360) % 360
       : ((asc + sun.longitude - moon.longitude) % 360 + 360) % 360;
-    expect(Math.abs(chart.partOfFortune.longitude - expected)).toBeLessThan(1e-9);
+    expect(Math.abs(chart.partOfFortune!.longitude - expected)).toBeLessThan(1e-9);
   });
 });
 

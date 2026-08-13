@@ -47,6 +47,7 @@ import {
   TRADITIONAL_RULERS,
   rulerOfSign,
 } from "@/lib/constants/rulerships";
+import { HOUSE_SYSTEMS, type HouseSystem } from "@/lib/ephemeris/client";
 import { DIANA, EINSTEIN, JOBS, MANDELA } from "./fixtures/charts";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -82,6 +83,9 @@ const BUILDABLE = HORIZONS.filter((f) => f.jd.ut >= JD_1800);
 const PRE_1800 = HORIZONS.filter((f) => f.jd.ut < JD_1800);
 
 const REFERENCE = [DIANA, EINSTEIN, JOBS, MANDELA];
+
+/** Every house system the API accepts — taken from the source, not retyped. */
+const ALL_HOUSE_SYSTEMS = Object.keys(HOUSE_SYSTEMS) as HouseSystem[];
 
 /** Every chart this file can actually build, labelled for failure messages. */
 const CHARTS: { label: string; chart: NatalChart }[] = [
@@ -575,10 +579,10 @@ describe("§4 derived points", () => {
       const moon = chart.planets.find((p) => p.name === "moon");
       if (!sun || !moon) continue;
       const asc = chart.houses.ascendant.longitude;
-      const expected = chart.partOfFortune.isDayBirth
+      const expected = chart.partOfFortune!.isDayBirth
         ? (((asc + moon.longitude - sun.longitude) % 360) + 360) % 360
         : (((asc + sun.longitude - moon.longitude) % 360) + 360) % 360;
-      expect(chart.partOfFortune.longitude, label).toBeCloseTo(expected, 9);
+      expect(chart.partOfFortune!.longitude, label).toBeCloseTo(expected, 9);
       checked++;
     }
     expect(checked).toBeGreaterThan(10);
@@ -610,61 +614,116 @@ describe("§4 derived points", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("§8 findings (characterization — rewrite on disposition)", () => {
-  // F7 — sect is read off the house number, so it is wrong under whole-sign.
-  // DISPOSITION: derive sect from the ASC/DSC horizon arc directly. When that
-  // lands, this test must be rewritten to assert sect agrees across ALL seven
-  // house systems on every fixture.
-  it("F7: sect depends on the requested house system, and disagrees under whole_sign", () => {
+  // F7 — FIXED. Sect is derived from the ASC/DSC horizon arc, not the Sun's
+  // house number, so it is invariant under the caller's house-system choice.
+  it("F7: sect is identical across every supported house system", () => {
+    // The whole point of the finding: the answer must not depend on the wheel.
+    // Run every fixture through all seven systems and require one answer each.
+    let charts = 0;
+    let dayCount = 0;
+    for (const fixture of [
+      ...REFERENCE.map((f) => ({ id: f.name, input: f.birth })),
+      ...BUILDABLE.map((f) => ({ id: f.id, input: f.input })),
+    ]) {
+      const answers = new Map<string, boolean>();
+      for (const system of ALL_HOUSE_SYSTEMS) {
+        const c = calculateNatalChart({
+          ...fixture.input,
+          house_system: system,
+        } as Parameters<typeof calculateNatalChart>[0]);
+        answers.set(system, c.partOfFortune!.isDayBirth);
+      }
+      expect(
+        new Set(answers.values()).size,
+        `${fixture.id}: sect must not depend on house system — got ${JSON.stringify([...answers])}`,
+      ).toBe(1);
+      if ([...answers.values()][0]) dayCount++;
+      charts++;
+    }
+    expect(charts).toBeGreaterThan(20);
+    // Non-vacuousness: a constant `true` (or `false`) would also be invariant.
+    // The fixture set must contain both day and night births.
+    expect(dayCount, "fixture set must contain day births").toBeGreaterThan(0);
+    expect(charts - dayCount, "fixture set must contain night births").toBeGreaterThan(0);
+  });
+
+  it("F7: sect matches the horizon, and the Part of Fortune follows it", () => {
+    // Invariance is not correctness — every system agreeing on the WRONG
+    // answer would pass the test above. Pin the value against the geometry.
     const KOLKATA = HORIZONS.find((f) => f.id === "kolkata-1972-half-hour");
     expect(KOLKATA, "fixture kolkata-1972-half-hour is required by F7").toBeDefined();
 
-    const quadrant = calculateNatalChart({
-      ...KOLKATA!.input,
-      house_system: "placidus",
-    } as Parameters<typeof calculateNatalChart>[0]);
-    const whole = calculateNatalChart({
-      ...KOLKATA!.input,
-      house_system: "whole_sign",
-    } as Parameters<typeof calculateNatalChart>[0]);
+    for (const { label, chart } of CHARTS) {
+      const asc = chart.houses.ascendant.longitude;
+      const sun = chart.planets.find((p) => p.name === "sun")!.longitude;
+      const moon = chart.planets.find((p) => p.name === "moon")!.longitude;
+      // Above the horizon ⇔ the Sun lies on the arc running backwards from the
+      // ASC to the DSC. This is the definition, computed independently here.
+      const aboveHorizon = (((asc - sun) % 360) + 360) % 360 < 180;
+      expect(chart.partOfFortune!.isDayBirth, `${label}: sect`).toBe(aboveHorizon);
 
-    // Ground truth, independent of any house system: the Sun's longitude lies
-    // on the arc running backwards from the ASC through 180°, so the Sun is
-    // above the horizon and the birth is diurnal.
+      // ...and the formula actually switches on it.
+      const expected = aboveHorizon
+        ? (((asc + moon - sun) % 360) + 360) % 360
+        : (((asc + sun - moon) % 360) + 360) % 360;
+      expect(chart.partOfFortune!.longitude, `${label}: PoF`).toBeCloseTo(expected, 9);
+    }
+
+    // The specific regression: whole-sign used to disagree with placidus here
+    // and move the Part of Fortune 135°.
+    const [quadrant, whole] = (["placidus", "whole_sign"] as const).map((house_system) =>
+      calculateNatalChart({ ...KOLKATA!.input, house_system } as Parameters<
+        typeof calculateNatalChart
+      >[0]),
+    );
+    expect(quadrant.partOfFortune!.isDayBirth, "Kolkata is a day birth").toBe(true);
+    expect(whole.partOfFortune!.isDayBirth, "whole_sign must agree").toBe(true);
+    expect(
+      angularDifference(quadrant.partOfFortune!.longitude, whole.partOfFortune!.longitude),
+      "the Part of Fortune must not move with the house system",
+    ).toBeCloseTo(0, 9);
+
+    // Non-vacuousness for the fixture itself: the Sun really is in the arc
+    // where the house-number proxy and the horizon disagree under whole-sign.
     const asc = quadrant.houses.ascendant.longitude;
     const sun = quadrant.planets.find((p) => p.name === "sun")!.longitude;
-    const arcBackFromAsc = (((asc - sun) % 360) + 360) % 360;
-    expect(arcBackFromAsc, "Sun must be above the horizon for this fixture").toBeLessThan(180);
-    expect(arcBackFromAsc).toBeCloseTo(2.89, 1); // rose ~11 minutes before birth
-
-    // The defect: same birth, two answers.
-    expect(quadrant.partOfFortune.isDayBirth).toBe(true); // correct
-    expect(whole.partOfFortune.isDayBirth).toBe(false); // WRONG — F7
+    expect((((asc - sun) % 360) + 360) % 360).toBeCloseTo(2.89, 1);
     expect(
-      angularDifference(quadrant.partOfFortune.longitude, whole.partOfFortune.longitude),
-    ).toBeGreaterThan(100); // measured 135°
+      whole.planets.find((p) => p.name === "sun")!.house,
+      "whole_sign still puts the Sun in house 1 — the proxy is still wrong, we stopped using it",
+    ).toBe(1);
+  });
 
-    // The systems whose houses 7–12 really are the above-horizon arc all agree.
-    for (const system of ["placidus", "koch", "porphyrius", "regiomontanus", "campanus", "equal"]) {
-      const c = calculateNatalChart({
-        ...KOLKATA!.input,
-        house_system: system,
+  // F8 — FIXED. The Part of Fortune is omitted, not fabricated, when a
+  // luminary is absent from the requested subset.
+  it("F8: Part of Fortune is omitted when a luminary is absent", () => {
+    for (const planets of [["mars", "venus"], ["sun", "mars"], ["moon", "mars"]]) {
+      const chart = calculateNatalChart({
+        ...DIANA.birth,
+        planets,
       } as Parameters<typeof calculateNatalChart>[0]);
-      expect(c.partOfFortune.isDayBirth, `${system} should agree with the horizon`).toBe(true);
+      expect(chart.partOfFortune, `planets=${planets.join(",")}`).toBeUndefined();
+      expect(
+        "partOfFortune" in chart,
+        "the key must be absent, not present-and-undefined — JSON must omit it",
+      ).toBe(false);
+      // The Ascendant is still returned; it is simply no longer masquerading
+      // as a Part of Fortune.
+      expect(chart.houses.ascendant.longitude).toBeGreaterThanOrEqual(0);
     }
   });
 
-  // F8 — the Part of Fortune is fabricated when a luminary is absent.
-  // DISPOSITION: return null. When that lands, rewrite to expect null.
-  it("F8: Part of Fortune silently returns the Ascendant when Sun/Moon are absent", () => {
-    const chart = calculateNatalChart({
+  it("F8: Part of Fortune is present whenever both luminaries are", () => {
+    // The omission must be narrow: it triggers on a missing luminary, not on
+    // anything else. Returning undefined always would pass the test above.
+    for (const { label, chart } of CHARTS) {
+      expect(chart.partOfFortune, `${label}: default chart has both luminaries`).toBeDefined();
+    }
+    const subset = calculateNatalChart({
       ...DIANA.birth,
-      planets: ["mars", "venus"],
+      planets: ["sun", "moon"],
     } as Parameters<typeof calculateNatalChart>[0]);
-    expect(chart.planets.some((p) => p.name === "sun")).toBe(false);
-    // Indistinguishable from a real PoF conjunct the ASC — identical to the last digit.
-    expect(chart.partOfFortune.longitude).toBe(chart.houses.ascendant.longitude);
-    // And it asserts a sect it cannot know.
-    expect(chart.partOfFortune.isDayBirth).toBe(false);
+    expect(subset.partOfFortune, "sun+moon subset is sufficient").toBeDefined();
   });
 
   // F9 — /api/v1/transit uses the natal orb table instead of the transit one.

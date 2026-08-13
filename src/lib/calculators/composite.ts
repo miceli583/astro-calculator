@@ -27,6 +27,7 @@ import {
   calculateNatalChart,
   computeAspects,
   computeChartRuler,
+  computePartOfFortune,
   longitudeToSign,
   patternPointsFromPlanets,
   type Aspect,
@@ -85,7 +86,13 @@ export interface CompositeChart {
     midheaven: { longitude: number; sign: SignPosition };
     vertex: { longitude: number; sign: SignPosition };
   };
-  partOfFortune: {
+  /**
+   * Composite Part of Fortune. Sect is taken from the composite Sun's position
+   * relative to the composite horizon, so it does not vary with the requested
+   * house system (F7). **Optional** — omitted when either luminary is absent
+   * from the requested `planets` subset (F8).
+   */
+  partOfFortune?: {
     longitude: number;
     sign: SignPosition;
     house: number;
@@ -221,28 +228,15 @@ export function calculateComposite(input: CompositeInput): CompositeChart {
   });
 
   // ── Part of Fortune from composite ASC/Sun/Moon (same rule as natal) ────
+  // Shares the natal implementation so the two cannot drift: sect from the
+  // horizon (F7), field omitted rather than fabricated when a luminary is
+  // missing from the requested subset (F8).
   const sun = planets.find((p) => p.name === "sun");
   const moon = planets.find((p) => p.name === "moon");
-  let partOfFortune: CompositeChart["partOfFortune"];
-  if (sun && moon) {
-    const isDayBirth = sun.house >= 7 && sun.house <= 12;
-    const pofLon = isDayBirth
-      ? (((houses.ascendant + moon.longitude - sun.longitude) % 360) + 360) % 360
-      : (((houses.ascendant + sun.longitude - moon.longitude) % 360) + 360) % 360;
-    partOfFortune = {
-      longitude: pofLon,
-      sign: longitudeToSign(pofLon),
-      house: houseFor(pofLon, cusps),
-      isDayBirth,
-    };
-  } else {
-    partOfFortune = {
-      longitude: houses.ascendant,
-      sign: longitudeToSign(houses.ascendant),
-      house: 1,
-      isDayBirth: false,
-    };
-  }
+  const partOfFortune =
+    sun && moon
+      ? computePartOfFortune(houses.ascendant, sun.longitude, moon.longitude, cusps)
+      : undefined;
 
   // ── Aspects within the composite chart (natal-scale orbs, speed 0) ──────
   const natalShaped: NatalPlanet[] = planets.map((p) => ({
@@ -276,7 +270,11 @@ export function calculateComposite(input: CompositeInput): CompositeChart {
       midheaven: { longitude: houses.midheaven, sign: longitudeToSign(houses.midheaven) },
       vertex: { longitude: houses.vertex, sign: longitudeToSign(houses.vertex) },
     },
-    partOfFortune,
+    // Spread rather than assign, so an omitted Part of Fortune leaves the key
+    // genuinely ABSENT rather than present-and-undefined. JSON.stringify drops
+    // undefined either way, but a JS consumer doing `"partOfFortune" in chart`
+    // would otherwise see a field that is not there (F8).
+    ...(partOfFortune ? { partOfFortune } : {}),
     aspects,
     patterns: detectAspectPatterns(patternPointsFromPlanets(natalShaped)),
     chartRuler: computeChartRuler(ascendantSign, natalShaped, aspects, input.rulership),

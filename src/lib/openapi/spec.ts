@@ -47,7 +47,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             content: { "application/json": { schema: { $ref: "#/components/schemas/NatalInput" } } },
           },
           responses: {
-            "200": { description: "Natal chart with planets, houses, aspects, aspect patterns (stellium, grand trine, T-square, grand cross, yod, kite, mystic rectangle), and the chart ruler (ruler of the Ascendant sign with placement + aspects)" },
+            "200": { description: "Natal chart with planets, houses, aspects, aspect patterns (stellium, grand trine, T-square, grand cross, yod, kite, mystic rectangle), and the chart ruler (ruler of the Ascendant sign with placement + aspects). `partOfFortune` is OPTIONAL: its formula requires both luminaries, so the field is omitted entirely (key absent) when `planets` excludes the Sun or the Moon. Its `isDayBirth` is determined by the Sun's position relative to the horizon and does not vary with `house_system`." },
             "422": { description: "Invalid input" },
           },
         },
@@ -117,7 +117,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/CompositeInput" } } },
           },
-          responses: { "200": { description: "Natal-style composite chart: midpoint planets with sign + house, derived house wheel, Part of Fortune, internal aspects, aspect patterns, and the composite chart ruler" } },
+          responses: { "200": { description: "Natal-style composite chart: midpoint planets with sign + house, derived house wheel, internal aspects, aspect patterns, and the composite chart ruler. `partOfFortune` is OPTIONAL — omitted entirely (key absent) when either luminary is missing from the composite point set — and its sect is read from the composite horizon, so it does not vary with `house_system`." } },
         },
       },
       "/api/v1/astrology/progressions": {
@@ -137,7 +137,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/SolarReturnInput" } } },
           },
-          responses: { "200": { description: "Full natal-style chart cast at the moment the transit Sun returns to the natal Sun longitude" } },
+          responses: { "200": { description: "Full natal-style chart cast at the moment the transit Sun returns to the natal Sun longitude. As with the natal chart, `partOfFortune` is optional and omitted when a luminary is absent from the requested `planets` subset." } },
         },
       },
       "/api/v1/astrology/planetary-return": {
@@ -149,7 +149,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/PlanetaryReturnInput" } } },
           },
-          responses: { "200": { description: "Full natal-style chart cast at the return moment, with the planet, natal longitude, and return JD-UT" } },
+          responses: { "200": { description: "Full natal-style chart cast at the return moment, with the planet, natal longitude, and return JD-UT. As with the natal chart, `partOfFortune` is optional and omitted when a luminary is absent from the requested `planets` subset." } },
         },
       },
       "/api/v1/astrocartography": {
