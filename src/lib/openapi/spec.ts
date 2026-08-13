@@ -1,6 +1,8 @@
 // OpenAPI 3.1 specification for the public Astro Calculator API.
 // Hand-authored (not derived from Zod) for control over docs and examples.
 
+import { API_VERSION } from "../version";
+
 export interface OpenAPISpec {
   openapi: string;
   info: Record<string, unknown>;
@@ -14,7 +16,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
     openapi: "3.1.0",
     info: {
       title: "Astro Calculator API",
-      version: "0.1.0",
+      version: API_VERSION,
       description:
         "Public, AGPL-licensed calculator API for astrology, astrocartography, " +
         "Human Design, Gene Keys, Life Path numerology, and Destiny Cards. " +
