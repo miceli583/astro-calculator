@@ -6,7 +6,12 @@ const config = [
   ...typescript,
   {
     // .hermes/.playwright-mcp are gitignored ops working dirs, not app source.
-    ignores: ["ephemeris/**", "scripts/**", ".hermes/**", ".playwright-mcp/**"],
+    // .worktrees holds git worktrees of this same repo. Their source is already
+    // linted from its own checkout, and once a worktree has been built its
+    // .next/ output lands here too — the Next preset's `.next/**` ignore is
+    // root-anchored, so it does not match `.worktrees/*/.next/**` and a built
+    // worktree turns `npm run lint` red with thousands of generated-file errors.
+    ignores: ["ephemeris/**", "scripts/**", ".hermes/**", ".playwright-mcp/**", ".worktrees/**"],
   },
 ];
 
