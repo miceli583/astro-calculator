@@ -192,7 +192,28 @@ The following do **not** participate in the natal aspect list:
 - **House cusps.**
 
 The **South Node is included**, and is the exact opposite of the true node by
-construction (§4). This has a consequence documented as **F11**.
+construction (§4). Its aspects to other bodies are reported normally; its
+aspect to the true node is not — see §1.7.
+
+### 1.7 Tautological pairs are excluded
+
+One pair is excluded from the aspect list regardless of geometry:
+
+| Pair | Why |
+|---|---|
+| `true_node` – `south_node` | The South Node is *defined* as `true_node + 180°` (§4.1), so the opposition is an identity, not an observation. |
+
+Reporting it was a defect (**F11**): being exact by construction, it was the
+tightest aspect in every chart ever calculated, so any consumer ranking aspects
+by orb or surfacing "the closest aspect" got this one first, always.
+
+The exclusion is on the **pair**, not on either point. The South Node still
+aspects everything else, and no other pair is suppressed for any reason —
+including genuinely exact ones. A real 0.00° opposition between two bodies is a
+rare and meaningful configuration and is reported.
+
+Implementation: `TAUTOLOGICAL_PAIRS` in `src/lib/calculators/astrology.ts`,
+keyed by the sorted name pair. Adding to that set is a change to this section.
 
 ---
 
@@ -493,7 +514,12 @@ since an applying transit is the one that has not yet peaked.
 The field being present and always false is worse than the field being absent:
 absent is unknown, `false` is a claim.
 
-### F11 — every chart carries a tautological node–node opposition
+### F11 — every chart carries a tautological node–node opposition — **FIXED**
+
+**Resolved** by excluding the pair specifically; the convention is now §1.7.
+The narrow disposition was taken: the South Node keeps its other aspects, and
+no other pair — exact or otherwise — is suppressed. The original finding
+follows.
 
 `computeAspects` runs over the planet list after the South Node has been
 appended, so `true_node` and `south_node` are aspected to each other. Because
@@ -509,11 +535,13 @@ consumer ranking aspects by orb, or reporting the closest aspect, gets this one
 first, always. It also makes the aspect list asymmetric with the pattern list,
 which excludes the South Node precisely because it is derived (§2.3 rule 5).
 
-Dispositions: exclude the node–node pair specifically; exclude the South Node
-from aspects as it is already excluded from patterns (larger contract change —
-the other six South Node aspects are meaningful to some schools); or document it
-and keep it. The narrow fix is defensible and cheap; the wide one is a judgement
-about whether nodal aspects are wanted at all.
+Dispositions considered: exclude the node–node pair specifically (**taken**);
+exclude the South Node from aspects as it is already excluded from patterns
+(rejected — a larger contract change, and the other six South Node aspects are
+meaningful to some schools); or document it and keep it (rejected — the
+ranking cost is real). The narrow fix is defensible and cheap; the wide one is
+a judgement about whether nodal aspects are wanted at all, which is a product
+question and not one this fix should have pre-empted.
 
 ---
 
