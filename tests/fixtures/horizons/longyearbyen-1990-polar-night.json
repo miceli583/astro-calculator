@@ -1,0 +1,122 @@
+{
+  "id": "longyearbyen-1990-polar-night",
+  "why": "78.22 N at the winter solstice — the extreme case",
+  "input": {
+    "datetime": "1990-12-21T00:30:00",
+    "timezone": "Europe/Oslo",
+    "latitude": 78.2232,
+    "longitude": 15.6469
+  },
+  "resolved": {
+    "offsetMinutes": 60,
+    "kind": "unique",
+    "utc": {
+      "year": 1990,
+      "month": 12,
+      "day": 20,
+      "hour": 23,
+      "minute": 30,
+      "second": 0
+    }
+  },
+  "jd": {
+    "tt": 2448246.4798285183,
+    "ut": 2448246.4791625086
+  },
+  "source": {
+    "api": "https://ssd.jpl.nasa.gov/api/horizons.api",
+    "harvestedAt": "2026-08-12",
+    "center": "500@399 (geocentric)",
+    "j2000": "EPHEM_TYPE=VECTORS, REF_PLANE=ECLIPTIC, REF_SYSTEM=ICRF, VEC_CORR=LT+S, epoch=JD(TT) as TDB",
+    "ofDate": "EPHEM_TYPE=OBSERVER, QUANTITIES=31 (ObsEcLon/ObsEcLat, true ecliptic and equinox of date), TIME_TYPE=TT",
+    "node": "EPHEM_TYPE=ELEMENTS, OM = osculating ascending node, J2000 ecliptic"
+  },
+  "j2000Ecliptic": {
+    "sun": {
+      "lon": 268.94996351980114,
+      "lat": -0.0012013774394495802,
+      "distanceAu": 0.9838140765465575
+    },
+    "moon": {
+      "lon": 310.4618075121816,
+      "lat": 1.1044356499074441,
+      "distanceAu": 0.0026688848233327976
+    },
+    "mercury": {
+      "lon": 276.64300314892586,
+      "lat": 1.2083353263585328,
+      "distanceAu": 0.6973190552931722
+    },
+    "venus": {
+      "lon": 281.01541112000285,
+      "lat": -0.9726498759417256,
+      "distanceAu": 1.6601917541526352
+    },
+    "mars": {
+      "lon": 58.77545877174617,
+      "lat": 2.1957115411368378,
+      "distanceAu": 0.607392047006848
+    },
+    "jupiter": {
+      "lon": 133.01365391496182,
+      "lat": 0.6449382796817326,
+      "distanceAu": 4.526195813828441
+    },
+    "saturn": {
+      "lon": 294.530622518307,
+      "lat": -0.13156927961315038,
+      "distanceAu": 10.87076679299129
+    },
+    "uranus": {
+      "lon": 279.19366741290366,
+      "lat": -0.3190824455529043,
+      "distanceAu": 20.41040993010609
+    },
+    "neptune": {
+      "lon": 283.8261290988446,
+      "lat": 0.7919086081299935,
+      "distanceAu": 31.15219883589564
+    },
+    "pluto": {
+      "lon": 229.37176908233243,
+      "lat": 14.882795116408902,
+      "distanceAu": 30.391020860935342
+    },
+    "chiron": {
+      "lon": 116.09540082265136,
+      "lat": -7.516574237107845,
+      "distanceAu": 9.767081855859887
+    }
+  },
+  "ofDateApparent": {
+    "mars": {
+      "lon": 58.653443,
+      "lat": 2.1946528
+    },
+    "jupiter": {
+      "lon": 132.8916078,
+      "lat": 0.644151
+    },
+    "saturn": {
+      "lon": 294.40859,
+      "lat": -0.1305443
+    },
+    "uranus": {
+      "lon": 279.0716422,
+      "lat": -0.3179402
+    },
+    "neptune": {
+      "lon": 283.7041071,
+      "lat": 0.7930245
+    },
+    "pluto": {
+      "lon": 229.2495483,
+      "lat": 14.8837556
+    },
+    "chiron": {
+      "lon": 115.9734453,
+      "lat": -7.5175828
+    }
+  },
+  "moonOsculatingNodeJ2000": 298.3176819059681
+}
