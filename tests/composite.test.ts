@@ -6,7 +6,11 @@ import {
 } from "@/lib/calculators/composite";
 import { calculateNatalChart } from "@/lib/calculators/astrology";
 import { compositeInputSchema } from "@/lib/validation/schemas";
+import { HOUSE_SYSTEMS, type HouseSystem } from "@/lib/ephemeris/client";
 import { DIANA, EINSTEIN, JOBS, MANDELA } from "./fixtures/charts";
+
+/** Every house system the API accepts — read from the source, not retyped. */
+const HOUSE_SYSTEMS_UNDER_TEST = Object.keys(HOUSE_SYSTEMS) as HouseSystem[];
 
 /** Independent shorter-arc midpoint of two longitudes (classic composite rule). */
 function pairMidpoint(a: number, b: number): number {
@@ -140,12 +144,23 @@ describe("calculateComposite — two charts (classic composite)", () => {
     const sun = composite.planets.find((p) => p.name === "sun")!;
     const moon = composite.planets.find((p) => p.name === "moon")!;
     const asc = composite.houses.ascendant.longitude;
-    const expectedDay = sun.house >= 7 && sun.house <= 12;
-    expect(composite.partOfFortune.isDayBirth).toBe(expectedDay);
+    // Sect from the HORIZON, not the Sun's house number. This test previously
+    // re-implemented the house-number proxy as its own expectation, so it
+    // agreed with the calculator by construction and could not have caught F7.
+    const expectedDay = (((asc - sun.longitude) % 360) + 360) % 360 < 180;
+    expect(composite.partOfFortune!.isDayBirth).toBe(expectedDay);
     const expected = expectedDay
       ? (((asc + moon.longitude - sun.longitude) % 360) + 360) % 360
       : (((asc + sun.longitude - moon.longitude) % 360) + 360) % 360;
-    expect(composite.partOfFortune.longitude).toBeCloseTo(expected, 6);
+    expect(composite.partOfFortune!.longitude).toBeCloseTo(expected, 6);
+  });
+
+  it("the composite Part of Fortune does not move with the house system (F7)", () => {
+    const answers = HOUSE_SYSTEMS_UNDER_TEST.map((house_system) => {
+      const c = calculateComposite({ charts: [DIANA.birth, JOBS.birth], house_system });
+      return { house_system, isDayBirth: c.partOfFortune!.isDayBirth };
+    });
+    expect(new Set(answers.map((a) => a.isDayBirth)).size, JSON.stringify(answers)).toBe(1);
   });
 
   it("computes internal aspects between composite planets", () => {

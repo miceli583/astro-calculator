@@ -350,9 +350,24 @@ on the arc running backwards from the Ascendant to the Descendant. That is a
 statement about the horizon, and it must give the same answer whichever house
 system the caller asked for.
 
-> **Finding.** Sect is derived from the Sun's *house number*, which tracks the
-> horizon only in some house systems — see **F7**. The Part of Fortune is also
-> fabricated rather than omitted when the Sun or Moon is absent — see **F8**.
+Concretely, the rule is `(ASC − Sun) mod 360 < 180` — implemented once, as
+`isAboveHorizon` in `src/lib/calculators/astrology.ts`, and shared by the natal
+and composite charts. It does **not** go through the Sun's house number, which
+tracks the horizon only in systems whose cusp 1 is the ASC (**F7**). A body
+exactly on the Ascendant counts as above (rising); one exactly on the Descendant
+counts as below (setting).
+
+**The field is optional.** The formula needs the Ascendant *and both
+luminaries*. When the caller's `planets` subset excludes the Sun or the Moon,
+`partOfFortune` is **omitted from the response entirely** — the key is absent,
+not null and not a placeholder. It previously fell back to the Ascendant's
+longitude with `isDayBirth: false`, which was byte-identical to a genuine Part
+of Fortune conjunct the Ascendant and therefore undetectable by a consumer
+(**F8**). Absent is honest; a computed-looking number that came from nothing is
+not.
+
+Consumers must treat `partOfFortune` as possibly-absent. Requesting a subset
+that includes `sun` and `moon` guarantees it is present.
 
 ---
 
@@ -408,7 +423,30 @@ astrology the API implements, which should require editing this document.
 
 Recorded, not patched. As at L1 and L2, a disagreement is an escalation.
 
-### F7 — sect is read off the house number, and is wrong under whole-sign houses
+### F7 — sect is read off the house number, and is wrong under whole-sign houses — **FIXED**
+
+**Resolved** by disposition 1: sect is now read from the horizon directly, via
+`isAboveHorizon(longitude, ascendant)` in `src/lib/calculators/astrology.ts`,
+and the house-number proxy is gone. The rule is normative in §4.2. The natal and
+composite charts share one implementation (`computePartOfFortune`) so they
+cannot drift — the composite carried a byte-for-byte copy of the same defect,
+and a fix confined to the natal calculator would have left it live on
+`/api/v1/composite`.
+
+Dispositions 2 and 3 were rejected: (2) an internally-derived quadrant wheel
+computes a whole extra house system to answer a question that is one line of
+horizon geometry, and still fails wherever the quadrant wheel itself degenerates
+(F6); (3) documenting the coupling leaves a published number moving 135° on a
+parameter that has no business affecting it.
+
+Regression tests: sect is computed across all seven supported house systems for
+24+ charts and asserted to be a single answer, with a day/night mix in the
+sample so the assertion cannot pass vacuously; and separately asserted equal to
+the horizon geometry on every chart, including the Kolkata fixture below. The
+whole-sign test explicitly still asserts the Sun lands in house 1 there — the
+proxy is still wrong, we stopped using it.
+
+The original finding follows.
 
 `isDayBirth` is computed as `sun.house >= 7 && sun.house <= 12`.
 
@@ -451,7 +489,31 @@ difference. Candidate dispositions, all product calls:
 3. Document the coupling and leave it. Hard to defend: the response gives no
    indication that the Part of Fortune depends on `house_system`.
 
-### F8 — the Part of Fortune is fabricated when the Sun or Moon is absent
+### F8 — the Part of Fortune is fabricated when the Sun or Moon is absent — **FIXED**
+
+**Resolved** by omitting the field: when either luminary is absent from the
+requested subset, `partOfFortune` is not present in the response at all. This is
+stronger than the `null` disposition originally preferred here, and was chosen
+over it because a `null` still occupies a typed slot a consumer must handle,
+while an absent key is the ordinary shape of "this optional field did not
+apply". §4.2 states the contract; the OpenAPI response descriptions state it on
+the endpoints that return the field.
+
+The implementation spreads conditionally (`...(partOfFortune ? { partOfFortune }
+: {})`) rather than assigning `undefined`. Both serialize identically, but
+`"partOfFortune" in chart` is `true` for an assigned `undefined`, which would
+have left a JS consumer seeing a field that is not there. The distinction is
+asserted in the tests.
+
+The rejected alternative — computing the luminaries internally regardless of the
+subset — was declined because it answers a request the caller did not make: a
+caller who asks for `["mars", "venus"]` and receives a point derived from the
+Sun and Moon has had their filter silently overridden. The Part of Fortune drops
+out of the transit/synastry overlay point set with the chart field, rather than
+being replaced by a placeholder that would generate aspect hits against a point
+that was never computed.
+
+The original finding follows.
 
 The formula needs the Sun, the Moon and the Ascendant. When the caller's
 `planets` subset omits either luminary the code falls back to returning **the

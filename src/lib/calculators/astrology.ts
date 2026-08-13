@@ -82,9 +82,17 @@ export interface NatalChart {
    * Part of Fortune (Pars Fortunae) — derived point representing material
    * well-being and "the place where you find your joy". Day-birth formula:
    * ASC + Moon - Sun. Night-birth formula: ASC + Sun - Moon (reversed).
-   * `isDayBirth` tells you which formula was used.
+   * `isDayBirth` tells you which formula was used, and is determined by the
+   * Sun's position relative to the horizon — not by its house number, so it
+   * does not vary with `house_system`.
+   *
+   * **Optional.** The formula requires both luminaries, so the field is
+   * OMITTED (the key is absent from the JSON) when the caller's `planets`
+   * subset excludes the Sun or the Moon. It previously fell back to the
+   * Ascendant's longitude with `isDayBirth: false`, which was indistinguishable
+   * from a real Part of Fortune conjunct the Ascendant. See finding F8.
    */
-  partOfFortune: {
+  partOfFortune?: {
     longitude: number;
     sign: SignPosition;
     house: number;
@@ -214,6 +222,51 @@ function houseFor(longitude: number, cusps: number[]): number {
     if (inHouse) return i + 1;
   }
   return 1;
+}
+
+/**
+ * Sect: is the Sun above the horizon?
+ *
+ * The horizon is the ASC–DSC axis, so the above-horizon hemisphere is the arc
+ * running *backwards* from the Ascendant through 180° to the Descendant. A body
+ * is above it when `(asc − longitude) mod 360 < 180`.
+ *
+ * This deliberately does NOT go through the Sun's house number. Houses 7–12
+ * coincide with that arc only when cusp 1 is the ASC and cusp 7 the DSC, which
+ * is false under `whole_sign` — house 1 there begins at the start of the
+ * Ascendant's *sign*. Reading sect off the house number therefore made the Part
+ * of Fortune depend on the caller's `house_system`, moving it by up to ~135°
+ * for a late-degree Ascendant. Sect is a property of the sky and must be
+ * invariant under the choice of wheel. See `docs/aspect-conventions.md` §4.2
+ * and finding F7.
+ *
+ * A body exactly on the Ascendant counts as above (rising); one exactly on the
+ * Descendant counts as below (setting).
+ */
+export function isAboveHorizon(longitude: number, ascendant: number): boolean {
+  return ((((ascendant - longitude) % 360) + 360) % 360) < 180;
+}
+
+/**
+ * Part of Fortune: day-birth = ASC + Moon − Sun; night-birth = ASC + Sun − Moon.
+ * Shared by the natal and composite charts so the two cannot drift apart.
+ */
+export function computePartOfFortune(
+  ascendant: number,
+  sunLongitude: number,
+  moonLongitude: number,
+  cusps: number[]
+): { longitude: number; sign: SignPosition; house: number; isDayBirth: boolean } {
+  const isDayBirth = isAboveHorizon(sunLongitude, ascendant);
+  const lon = isDayBirth
+    ? (((ascendant + moonLongitude - sunLongitude) % 360) + 360) % 360
+    : (((ascendant + sunLongitude - moonLongitude) % 360) + 360) % 360;
+  return {
+    longitude: lon,
+    sign: longitudeToSign(lon),
+    house: houseFor(lon, cusps),
+    isDayBirth,
+  };
 }
 
 /**
@@ -355,31 +408,20 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
     });
   }
 
-  // Part of Fortune: day-birth = ASC + Moon - Sun; night-birth = ASC + Sun - Moon.
-  // Day birth ≡ Sun above horizon ≡ Sun's house ∈ {7..12} under conventional
-  // house counting (1 starts at ASC, descending eastern horizon).
+  // Part of Fortune. Omitted entirely when either luminary is absent from the
+  // requested `planets` subset — the formula needs both, and the Ascendant is
+  // not a stand-in for a value we cannot compute (see `partOfFortune` above).
   const sunPlanet = planets.find((p) => p.name === "sun");
   const moonPlanet = planets.find((p) => p.name === "moon");
-  let partOfFortune;
-  if (sunPlanet && moonPlanet) {
-    const isDayBirth = sunPlanet.house >= 7 && sunPlanet.house <= 12;
-    const pofLon = isDayBirth
-      ? ((houses.ascendant + moonPlanet.longitude - sunPlanet.longitude) % 360 + 360) % 360
-      : ((houses.ascendant + sunPlanet.longitude - moonPlanet.longitude) % 360 + 360) % 360;
-    partOfFortune = {
-      longitude: pofLon,
-      sign: longitudeToSign(pofLon),
-      house: houseFor(pofLon, houses.cusps),
-      isDayBirth,
-    };
-  } else {
-    partOfFortune = {
-      longitude: houses.ascendant,
-      sign: longitudeToSign(houses.ascendant),
-      house: 1,
-      isDayBirth: false,
-    };
-  }
+  const partOfFortune =
+    sunPlanet && moonPlanet
+      ? computePartOfFortune(
+          houses.ascendant,
+          sunPlanet.longitude,
+          moonPlanet.longitude,
+          houses.cusps,
+        )
+      : undefined;
 
   const aspects = computeAspects(planets);
   const ascendantSign = longitudeToSign(houses.ascendant).sign;
@@ -398,7 +440,11 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
       midheaven: { longitude: houses.midheaven, sign: longitudeToSign(houses.midheaven) },
       vertex: { longitude: houses.vertex, sign: longitudeToSign(houses.vertex) },
     },
-    partOfFortune,
+    // Spread rather than assign, so an omitted Part of Fortune leaves the key
+    // genuinely ABSENT rather than present-and-undefined. JSON.stringify drops
+    // undefined either way, but a JS consumer doing `"partOfFortune" in chart`
+    // would otherwise see a field that is not there (F8).
+    ...(partOfFortune ? { partOfFortune } : {}),
     aspects,
     patterns: detectAspectPatterns(patternPointsFromPlanets(planets)),
     chartRuler: computeChartRuler(ascendantSign, planets, aspects, input.rulership),
