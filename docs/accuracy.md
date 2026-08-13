@@ -304,14 +304,14 @@ charts. Near the encounter the two ephemerides agree to ~0.001″, and even in
 > **sweph silently substitutes its built-in Moshier analytic ephemeris** — the
 > returned flag has `SEFLG_MOSEPH` set, which the suite now asserts explicitly.
 > The pre-1800 comparison is Moshier-vs-DE441 and says nothing whatever about
-> Swiss Ephemeris accuracy. See finding **F1** in §7, which is more serious than
-> the tolerance question.
+> Swiss Ephemeris accuracy. The `ephemeris` field on every response names
+> which of the two answered — see finding **F1** in §6.
 
 | Bodies | Tolerance | Reason |
 |---|---|---|
 | Moon | **2.0″** | Moshier is a truncated analytic theory; the lunar theory carries the largest truncated terms. Measured 1.10″. |
 | Sun, planets | **1.0″** | Moshier's documented agreement with the DE series is of order an arcsecond. Measured worst 0.45″ (Jupiter, 1750). |
-| Chiron | *no ephemeris at all* | `seas_12.se1` is not shipped and there is no analytic fallback for asteroids, so sweph **refuses** (`flag < 0`) rather than degrading. The suite pins the refusal, because a refusal is the one outcome a positional tolerance can never notice. Finding **F2** in §7. |
+| Chiron | *no ephemeris at all* | `seas_12.se1` is not shipped and there is no analytic fallback for asteroids, so sweph **refuses** (`flag < 0`) rather than degrading. The suite pins the refusal, because a refusal is the one outcome a positional tolerance can never notice. Finding **F2** in §6. |
 
 These bounds describe **Moshier**, not the Swiss Ephemeris, and must not be
 quoted as an accuracy figure for this API's normal operating range.
@@ -352,10 +352,11 @@ Moshier era 2.0″ (measured 0.96″).
 ## 6. Findings
 
 Building this tier turned up four things. **None of them was fixed by adjusting
-a tolerance**, and F1 in particular is a live defect that this document records
-rather than resolves — the fix is a separate change with its own review.
+a tolerance.** F1 and F2 were live defects when first written up; both were
+fixed on 2026-08-13 and the write-ups below record the diagnosis, the chosen
+disposition, and the reason the other options were declined.
 
-### F1 — every birth date before 1800 returns a 500 (defect, unfixed)
+### F1 — every birth date before 1800 returned a 500 (fixed 2026-08-13)
 
 `src/lib/ephemeris/client.ts` treats sweph's `error` field as fatal:
 
@@ -379,25 +380,55 @@ this code raises as an exception. Verified end to end through the exported
 1950 London: OK  sun lon=82.987053
 ```
 
-Charts from 1800 onward are unaffected. There are two separable issues: the
-warning/error conflation, and the decision about pre-1800 coverage. Three
-dispositions are available and the choice is a product one, not a test one:
+Charts from 1800 onward were unaffected. Three dispositions were available:
 
 1. Ship `sepl_12.se1` / `semo_12.se1` / `seas_12.se1` (already available behind
    `EPHE_RANGE=full` in `scripts/download-ephemeris.mjs`) — extends real Swiss
    Ephemeris coverage back to 1200 CE at ~10 MB of bundle.
-2. Gate on `flag < 0` instead of `error`, and surface the Moshier fallback as a
-   response warning — pre-1800 charts then work at Moshier accuracy (§5.2)
-   rather than 500ing, and the degradation is visible to the caller.
+2. Gate on `flag < 0` instead of `error`, and surface the Moshier fallback in
+   the response — pre-1800 charts then work at Moshier accuracy (§5.2) rather
+   than 500ing, and the degradation is visible to the caller.
 3. Return a documented 4xx with an explicit supported range.
 
-### F2 — Chiron has no ephemeris at all before 1800
+**Chosen: (2).** (1) buys Swiss-grade precision for a range no caller has asked
+for, at a permanent ~10 MB of repo and bundle weight; it can be revisited if one
+does. (3) turns a computable chart into an error, which is strictly worse than a
+labelled approximation. The objection to (2) is that a silent downgrade is a lie
+of omission — so it is not silent: every response that returns positions now
+carries **`ephemeris`**, naming the source that actually answered
+(`"swiss" | "moshier" | "jpl" | "mixed"`), decoded from sweph's return flag
+rather than inferred from the date. `tests/ephemeris-fallback.test.ts` asserts
+both directions — a pre-1800 chart must say `"moshier"` and a modern one must
+say `"swiss"` — so a fix that hardcoded the label, or that swallowed every
+error and always claimed one source, fails.
+
+The fix itself is three lines of semantics: `flag < 0` is failure; a non-empty
+`error` alongside a non-negative flag is a warning; the ephemeris bit of the
+flag (`SEFLG_SWIEPH = 2`, `SEFLG_MOSEPH = 4`, `SEFLG_JPLEPH = 1`) says which
+source answered.
+
+### F2 — Chiron has no ephemeris at all before 1800 (fixed 2026-08-13)
 
 `seas_12.se1` is not shipped and there is no analytic fallback for asteroids, so
 sweph **refuses** (`flag < 0`) rather than degrading. This is a genuine refusal,
 not a silent fallback, and it survives disposition (2) above — option (1) is the
-only one that makes pre-1800 Chiron work. Pinned by the suite, because a refusal
-is the one outcome a positional tolerance can never notice.
+only one that would make pre-1800 Chiron work. Pinned by the suite, because a
+refusal is the one outcome a positional tolerance can never notice.
+
+Before the fix a single refused body took the whole chart down with it. Now the
+refusal is reported and the other twelve bodies are returned: charts carry an
+optional **`unavailableBodies`** array of `{ name, longitude: null, reason }`,
+plus a warning naming the bodies.
+
+This is deliberately *not* F8's convention. F8 omits the Part of Fortune
+entirely, because there the caller's own `planets` subset made the omission
+self-explanatory. Here the caller asked for Chiron, so silence would be
+indistinguishable from "not requested" — a present-but-null entry with a reason
+is the honest shape. Same principle in both: never make an absence ambiguous.
+
+Two paths are strict rather than tolerant. Human Design and Gene Keys **throw**
+when any body is unavailable, because a partial body set does not produce a
+slightly incomplete bodygraph — it produces a structurally different, wrong one.
 
 ### F3 — Horizons has no Neptune or Pluto at 1750 and 1799
 
@@ -407,7 +438,7 @@ with no `$SOE` block. Recorded in the `notes` field of `paris-1750` and
 suite requires that any body missing from a fixture be accompanied by a note, so
 coverage cannot shrink silently. A barycentre fallback (COMMAND `8`/`9`) would
 close this at the cost of a centre mismatch; not currently worth it, since the
-pre-1800 range is degraded anyway (F1).
+pre-1800 range is served from Moshier anyway (F1) and is labelled as such.
 
 ### F4 — `SE_TRUE_NODE` is not the osculating node
 

@@ -31,7 +31,15 @@ interface ChartActivations {
 }
 
 function chartActivations(jd: number): ChartActivations {
-  const positions = calcAllPlanets(jd, GK_PLANETS);
+  const { positions, unavailable } = calcAllPlanets(jd, GK_PLANETS);
+  // Same reasoning as Human Design: the sphere set is structural, not a subset
+  // the caller chose, so a missing body is a failure rather than a gap.
+  if (unavailable.length > 0) {
+    throw new Error(
+      `Gene Keys requires all ${GK_PLANETS.length} bodies; ephemeris unavailable for: ` +
+        unavailable.map((u) => `${u.name} (${u.reason})`).join(", ")
+    );
+  }
   const byPlanet: ChartActivations["byPlanet"] = {};
   for (const p of GK_PLANETS) {
     byPlanet[p] = { longitude: positions[p].longitude, ...longitudeToGate(positions[p].longitude) };
