@@ -59,7 +59,12 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/TransitInput" } } },
           },
-          responses: { "200": { description: "Transit chart" } },
+          responses: {
+            "200": {
+              description:
+                "Transit chart. Aspects to the natal chart use the TRANSIT orb table (conjunction/opposition/square 3°, trine/sextile 2°, quincunx 1.5°) — the same table as `/api/v1/transit/natal`, so both endpoints return the same aspects for the same moment. Each aspect carries `motion`: `\"applying\"`, `\"separating\"`, or `\"stationary\"` when the two bodies' relative speed is below 1e-4°/day. The boolean `applying` is OPTIONAL and is omitted entirely (key absent) when `motion` is `\"stationary\"`, since neither direction would be a true claim. This endpoint does not yet accept an `orbs` override; use `/api/v1/transit/natal` for custom orbs.",
+            },
+          },
         },
       },
       "/api/v1/transit": {
@@ -79,7 +84,8 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
           },
-          responses: { "200": { description: "Natal chart, transit sky, and overlay (aspects, hdActivations, houseOverlays)" } },
+          responses: { "200": { description:
+                "Natal chart, transit sky, and overlay (aspects, hdActivations, houseOverlays). Each aspect hit carries `motion`: `\"applying\"`, `\"separating\"`, or `\"stationary\"`. The boolean `applying` is OPTIONAL — omitted (key absent) when the direction is not determinate, i.e. `motion` is `\"stationary\"` or no speed was available for the moving point. `motion` itself is absent in that no-speed case, which is a different claim from `\"stationary\"`: unknown rather than none." } },
         },
       },
       "/api/v1/transit/events": {
@@ -105,7 +111,8 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
           },
-          responses: { "200": { description: "Both natal charts plus bidirectional overlays (bOnA and aOnB)" } },
+          responses: { "200": { description:
+                "Both natal charts plus bidirectional overlays (bOnA and aOnB). Aspect hits carry the same optional `applying` / three-valued `motion` fields as `/api/v1/transit/natal`." } },
         },
       },
       "/api/v1/composite": {

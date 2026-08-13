@@ -24,6 +24,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  aspectMotion,
   calculateNatalChart,
   calculateTransits,
   computeAspects,
@@ -343,7 +344,6 @@ describe("§1.5 reported orb is the true distance to exact", () => {
     for (const [speedA, speedB] of [
       [1, 0.5], // closing
       [0.5, 1], // opening
-      [1, 1], // no relative motion
     ]) {
       const aspects = computeAspects([
         { ...sun, longitude: 10, speed: speedA },
@@ -353,7 +353,19 @@ describe("§1.5 reported orb is the true distance to exact", () => {
       expect(trine, `exact trine must be detected (speeds ${speedA}/${speedB})`).toBeDefined();
       expect(trine!.orb).toBeCloseTo(0, 9);
       expect(trine!.applying, "a partile aspect must not claim to be applying").toBe(false);
+      expect(trine!.motion).toBe("separating");
     }
+
+    // Equal speeds are the third case, and they are no longer "applying: false"
+    // — the pair is not moving with respect to each other at all, so neither
+    // direction is true of it and the field is absent (F10, §1.5).
+    const locked = computeAspects([
+      { ...sun, longitude: 10, speed: 1 },
+      { ...mars, longitude: 130, speed: 1 },
+    ]).find((a) => a.type === "trine")!;
+    expect(locked.motion).toBe("stationary");
+    expect(locked.applying).toBeUndefined();
+    expect("applying" in locked, "the key must be absent, not present-and-undefined").toBe(false);
   });
 });
 
@@ -726,61 +738,143 @@ describe("§8 findings (characterization — rewrite on disposition)", () => {
     expect(subset.partOfFortune, "sun+moon subset is sufficient").toBeDefined();
   });
 
-  // F9 — /api/v1/transit uses the natal orb table instead of the transit one.
-  // DISPOSITION: use DEFAULT_TRANSIT_ORBS (and honour the caller's override).
-  // When that lands, rewrite to assert every hit is within the transit table.
-  it("F9: /api/v1/transit uses natal orbs, not the transit table", () => {
+  // F9 — FIXED. `/api/v1/astrology/transits` read the NATAL orb table; the
+  // overlay path behind `/api/v1/transit/natal` read the transit table, 2–2.7×
+  // tighter. Two endpoints, one question, two answers. These tests replace the
+  // characterization pair that pinned the defect.
+  //
+  // Note the endpoint names: the defect was in `calculateTransits`
+  // (`/api/v1/astrology/transits`), NOT `/api/v1/transit`, which is
+  // `calculateTransitSky` and returns no transit-to-natal aspects at all. The
+  // original finding named the wrong URL.
+
+  it("F9: every transit hit is within the TRANSIT orb table", () => {
     const t = calculateTransits({
       natal: DIANA.birth,
       transit_datetime: "2026-08-12T12:00:00",
       transit_timezone: "UTC",
     } as Parameters<typeof calculateTransits>[0]);
 
-    const tooWide = t.aspectsToNatal.filter(
-      (a) => a.orb > DEFAULT_TRANSIT_ORBS[a.type as AspectType],
-    );
-    // Two thirds of the list is wider than the documented transit orbs.
-    expect(tooWide.length).toBeGreaterThan(t.aspectsToNatal.length / 2);
-    // ...but all of it is inside the natal table, which is the actual behaviour.
-    for (const a of t.aspectsToNatal) {
-      expect(a.orb).toBeLessThanOrEqual(NATAL_ORBS[a.type as AspectType]);
-    }
+    // Non-vacuity: returning nothing would satisfy the ceiling trivially, and
+    // an all-but-exact list would never exercise it.
+    expect(t.aspectsToNatal.length).toBeGreaterThan(10);
+    expect(
+      t.aspectsToNatal.filter((a) => a.orb > 1).length,
+      "the orb ceiling must actually be exercised",
+    ).toBeGreaterThan(0);
 
-    // The overlay path, asked the same question, returns far fewer.
-    const natal = calculateNatalChart(DIANA.birth);
-    const overlay = computeOverlay(
-      {
-        points: natal.planets.map((p) => ({ name: p.name, longitude: p.longitude, speed: p.speed })),
-        cusps: natal.houses.cusps.map((c) => c.longitude),
-      },
-      {
-        points: t.transitingPlanets.map((p) => ({ name: p.name, longitude: p.longitude, speed: p.speed })),
-      },
-      {} as Parameters<typeof computeOverlay>[2],
-    );
-    expect(t.aspectsToNatal.length).toBeGreaterThan(overlay.aspects.length * 2);
+    for (const a of t.aspectsToNatal) {
+      expect(a.orb, `${a.from} ${a.type} ${a.to}`).toBeLessThanOrEqual(
+        DEFAULT_TRANSIT_ORBS[a.type as AspectType],
+      );
+    }
   });
 
-  // F10 — /api/v1/transit hardcodes applying: false.
-  // DISPOSITION: compute it from the transiting body's speed, as the overlay
-  // path already does. When that lands, rewrite to assert a realistic mix.
-  it("F10: /api/v1/transit reports applying: false for every hit", () => {
+  it("F9: both transit paths return the same aspects for the same question", () => {
+    // The ceiling test above passes if BOTH paths move to some third table.
+    // This one pins the property the finding is actually about: asked the same
+    // question about the same bodies, the two code paths must agree.
     const t = calculateTransits({
       natal: DIANA.birth,
       transit_datetime: "2026-08-12T12:00:00",
       transit_timezone: "UTC",
     } as Parameters<typeof calculateTransits>[0]);
-    expect(t.aspectsToNatal.length).toBeGreaterThan(20);
-    expect(t.aspectsToNatal.every((a) => a.applying === false)).toBe(true);
-
-    // The overlay path, with the same bodies and speeds, finds roughly half applying.
     const natal = calculateNatalChart(DIANA.birth);
+
+    // Same point sets on both sides: `calculateTransits` aspects natal planets
+    // only, while `buildNatalOverlayPoints` adds the angles — so the overlay is
+    // driven with the planet list directly rather than through that helper.
     const overlay = computeOverlay(
       { points: natal.planets.map((p) => ({ name: p.name, longitude: p.longitude, speed: p.speed })) },
-      { points: t.transitingPlanets.map((p) => ({ name: p.name, longitude: p.longitude, speed: p.speed })) },
+      {
+        points: t.transitingPlanets.map((p) => ({
+          name: p.name,
+          longitude: p.longitude,
+          speed: p.speed,
+        })),
+      },
       {} as Parameters<typeof computeOverlay>[2],
     );
-    expect(overlay.aspects.filter((a) => a.applying).length).toBeGreaterThan(0);
+
+    const key = (from: string, to: string, type: string) => `${from}|${type}|${to}`;
+    const mine = new Set(t.aspectsToNatal.map((a) => key(a.from, a.to, a.type)));
+    const theirs = new Set(overlay.aspects.map((a) => key(a.transitPoint, a.natalPoint, a.aspect)));
+
+    expect(mine.size).toBeGreaterThan(10);
+    expect([...mine].filter((k) => !theirs.has(k)), "hits only /astrology/transits reports").toEqual([]);
+    expect([...theirs].filter((k) => !mine.has(k)), "hits only /transit/natal reports").toEqual([]);
+
+    // ...and to the same precision, not merely the same list.
+    for (const a of t.aspectsToNatal) {
+      const match = overlay.aspects.find(
+        (o) => key(o.transitPoint, o.natalPoint, o.aspect) === key(a.from, a.to, a.type),
+      )!;
+      expect(a.orb, `${a.from} ${a.type} ${a.to}`).toBeCloseTo(match.orb, 9);
+    }
+  });
+
+  // F10 — FIXED. Every hit carried a hardcoded `applying: false`.
+
+  it("F10: applying is computed, and comes out mixed", () => {
+    const t = calculateTransits({
+      natal: DIANA.birth,
+      transit_datetime: "2026-08-12T12:00:00",
+      transit_timezone: "UTC",
+    } as Parameters<typeof calculateTransits>[0]);
+
+    const applying = t.aspectsToNatal.filter((a) => a.applying === true).length;
+    const separating = t.aspectsToNatal.filter((a) => a.applying === false).length;
+    // A blanket true is as wrong as a blanket false; both are excluded.
+    expect(applying, "some transits must be applying").toBeGreaterThan(0);
+    expect(separating, "some transits must be separating").toBeGreaterThan(0);
+  });
+
+  it("F10: applying agrees with where the bodies actually go", () => {
+    // Independent of the calculator's linear extrapolation: re-ask the
+    // EPHEMERIS where the transiting bodies are 15 minutes later and check that
+    // the orb moved the way the flag claims.
+    const when = "2026-08-12T12:00:00";
+    const t = calculateTransits({
+      natal: DIANA.birth,
+      transit_datetime: when,
+      transit_timezone: "UTC",
+    } as Parameters<typeof calculateTransits>[0]);
+    const later = calculateTransits({
+      natal: DIANA.birth,
+      transit_datetime: "2026-08-12T12:15:00",
+      transit_timezone: "UTC",
+    } as Parameters<typeof calculateTransits>[0]);
+    const natal = calculateNatalChart(DIANA.birth);
+
+    let checked = 0;
+    for (const a of t.aspectsToNatal) {
+      // Skip hits within a whisker of exact: the orb turns around there, so
+      // which side of the turn a 15-minute step lands on is not a stable
+      // prediction. §1.5 covers the partile case directly instead.
+      if (a.orb < 0.05) continue;
+      const tp = later.transitingPlanets.find((p) => p.name === a.from)!;
+      const np = natal.planets.find((p) => p.name === a.to)!;
+      const orbLater = Math.abs(angularDifference(tp.longitude, np.longitude) - a.exactAngle);
+      expect(orbLater < a.orb, `${a.from} ${a.type} ${a.to} (orb ${a.orb.toFixed(3)})`).toBe(
+        a.applying === true,
+      );
+      checked++;
+    }
+    expect(checked, "the comparison must actually run").toBeGreaterThan(10);
+  });
+
+  it("F10: a stationary pair reports neither direction", () => {
+    // `applying` is two-valued and the truth here is a third thing, so the
+    // field is absent and `motion` carries the answer.
+    const stationary = aspectMotion(10, 0.4, 130, 0.4, 120, 0);
+    expect(stationary).toBe("stationary");
+
+    // The tolerance must not swallow real motion. Saturn–Pluto at 0.0049°/day
+    // is slow, but it is moving and its direction is determinate — measured at
+    // 40 of 1304 aspecting pairs inside a 0.01°/day tolerance, versus 2 inside
+    // the 1e-4 tolerance actually used.
+    expect(aspectMotion(10, 0.0235, 130.5, 0.0186, 120, 0.5)).not.toBe("stationary");
+    expect(aspectMotion(10, 0.001, 130.5, 0, 120, 0.5)).not.toBe("stationary");
   });
 
   // F11 — FIXED. The node/south-node opposition is an identity, not a

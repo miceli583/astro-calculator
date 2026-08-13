@@ -12,45 +12,24 @@
 //      a channel in transit or connection charts).
 //   3. House overlays — which of A's houses each of B's points falls into.
 
-import { longitudeToSign, type NatalChart } from "./astrology";
+import { aspectMotion, longitudeToSign, type AspectMotion, type NatalChart } from "./astrology";
 import { longitudeToGate } from "../constants/hd-gates";
+import {
+  ASPECT_ANGLES,
+  DEFAULT_TRANSIT_ORBS,
+  type AspectType,
+} from "../constants/orbs";
 
-export type AspectType =
-  | "conjunction"
-  | "sextile"
-  | "square"
-  | "trine"
-  | "quincunx"
-  | "opposition";
-
-export const ASPECT_ANGLES: Record<AspectType, number> = {
-  conjunction: 0,
-  sextile: 60,
-  square: 90,
-  trine: 120,
-  quincunx: 150,
-  opposition: 180,
-};
-
-/** Standard orbs for transit-to-natal analysis (tighter than natal-scale). */
-export const DEFAULT_TRANSIT_ORBS: Record<AspectType, number> = {
-  conjunction: 3.0,
-  opposition: 3.0,
-  square: 3.0,
-  trine: 2.0,
-  sextile: 2.0,
-  quincunx: 1.5,
-};
-
-/** Slightly wider orbs suitable for synastry (personal-planet contacts).  */
-export const DEFAULT_SYNASTRY_ORBS: Record<AspectType, number> = {
-  conjunction: 5.0,
-  opposition: 5.0,
-  square: 4.0,
-  trine: 4.0,
-  sextile: 3.0,
-  quincunx: 2.0,
-};
+// The aspect vocabulary and the orb tables now live in `constants/orbs.ts` so
+// that `astrology.ts` can reach them too — it could not import them from here
+// without a runtime cycle, which is how the two transit paths ended up on two
+// different tables (F9). Re-exported so existing importers are unchanged.
+export {
+  ASPECT_ANGLES,
+  DEFAULT_TRANSIT_ORBS,
+  DEFAULT_SYNASTRY_ORBS,
+  type AspectType,
+} from "../constants/orbs";
 
 export interface OverlayPoint {
   /** Point identifier: planet name ("sun", "moon"), angle ("asc", "mc"), etc. */
@@ -83,8 +62,18 @@ export interface AspectHit {
   exactAngle: number;
   /** Distance from exact aspect in degrees. */
   orb: number;
-  /** True if the aspect is tightening (transit body approaching exact). */
+  /**
+   * True if the aspect is tightening (transit body approaching exact).
+   * Absent when the direction is not determinate: either no speed was supplied
+   * for the moving point, or `motion` is `"stationary"`.
+   */
   applying?: boolean;
+  /**
+   * Three-valued direction. Absent — as opposed to `"stationary"` — means no
+   * speed was supplied for the moving point, so the direction is unknown rather
+   * than absent. See F10.
+   */
+  motion?: AspectMotion;
   /** Zodiac sign of the natal point (context for prose/theme lookup). */
   natalSign?: string;
   /** House the natal point occupies (1-12). Present only if natal.cusps provided. */
@@ -198,13 +187,20 @@ export function computeOverlay(
         const target = ASPECT_ANGLES[a];
         const orb = Math.abs(sep - target);
         if (orb > orbs[a]) continue;
-        let applying: boolean | undefined;
-        if (o.speed != null) {
-          // Sample ~15 minutes into the future along the transiting body's motion.
-          const future = o.longitude + o.speed * 0.01;
-          const sepFuture = angularDifference(future, n.longitude);
-          applying = Math.abs(sepFuture - target) < orb;
-        }
+        // Shares the natal/transit implementation so the two transit endpoints
+        // cannot drift on direction the way they drifted on orbs (F9/F10).
+        // A point with no speed keeps `motion` absent — unknown, not stationary.
+        //
+        // The framing chart's speed is deliberately 0, NOT `n.speed`: this chart
+        // is a fixed moment, and a natal point's `speed` is the motion the body
+        // had at birth — data about that instant, carried for the retrograde
+        // flag, not motion happening now. Feeding it in would make a transit's
+        // direction depend on how fast the natal Sun was moving in 1961.
+        const motion =
+          o.speed != null
+            ? aspectMotion(o.longitude, o.speed, n.longitude, 0, target, orb)
+            : undefined;
+        const applying = motion == null || motion === "stationary" ? undefined : motion === "applying";
         const natalSign = longitudeToSign(n.longitude).sign;
         const natalHouse = natal.cusps ? houseFor(n.longitude, natal.cusps) : undefined;
         aspects.push({
@@ -213,7 +209,10 @@ export function computeOverlay(
           aspect: a,
           exactAngle: target,
           orb,
-          applying,
+          // Spread so an indeterminate direction leaves the keys genuinely
+          // absent rather than present-and-undefined (cf. F8).
+          ...(applying != null ? { applying } : {}),
+          ...(motion != null ? { motion } : {}),
           natalSign,
           natalHouse,
           transitSign,
