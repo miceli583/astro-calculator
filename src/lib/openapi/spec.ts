@@ -90,7 +90,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           responses: {
             "200": {
               description:
-                "Transit chart. Aspects to the natal chart use the TRANSIT orb table (conjunction/opposition/square 3°, trine/sextile 2°, quincunx 1.5°) — the same table as `/api/v1/transit/natal`, so both endpoints return the same aspects for the same moment. Each aspect carries `motion`: `\"applying\"`, `\"separating\"`, or `\"stationary\"` when the two bodies' relative speed is below 1e-4°/day. The boolean `applying` is OPTIONAL and is omitted entirely (key absent) when `motion` is `\"stationary\"`, since neither direction would be a true claim. This endpoint does not yet accept an `orbs` override; use `/api/v1/transit/natal` for custom orbs. " +
+                "Transit chart. Aspects to the natal chart use the TRANSIT orb table (conjunction/opposition/square 3°, trine/sextile 2°, quincunx 1.5°) — the same table as `/api/v1/transit/natal`, so both endpoints return the same aspects for the same moment. Each aspect carries `motion`: `\"applying\"`, `\"separating\"`, or `\"stationary\"` when the two bodies' relative speed is below 1e-4°/day. The boolean `applying` is OPTIONAL and is omitted entirely (key absent) when `motion` is `\"stationary\"`, since neither direction would be a true claim. That table is the DEFAULT, not a ceiling: send `orbs` to override any subset of it, merged over the defaults, exactly as `/api/v1/transit/natal` and `/api/v1/synastry` accept it. The two transit endpoints agree under a custom table as well as the default one. " +
                 EPHEMERIS_PROSE +
                 " The transit sky is sourced separately from the natal chart, so it reports `transitEphemeris` and `unavailableTransitBodies` alongside the natal chart's own `ephemeris` and `unavailableBodies`.",
             },
@@ -300,6 +300,20 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             transit_datetime: { type: "string", example: "2026-05-15T12:00:00" },
             transit_timezone: { type: "string", example: "UTC" },
             planets: { type: "array", items: { type: "string" } },
+            orbs: { $ref: "#/components/schemas/OrbOverride" },
+          },
+        },
+        OrbOverride: {
+          type: "object",
+          description:
+            "Per-aspect orb overrides, in degrees. Merged OVER the endpoint's default table rather than replacing it: any aspect you omit keeps its default orb. Capped at 15° per aspect, which is half the smallest gap between two exact aspect angles — so no two aspect windows can overlap and each pair of bodies still yields at most one aspect.",
+          properties: {
+            conjunction: { type: "number", minimum: 0, maximum: 15, example: 6 },
+            sextile: { type: "number", minimum: 0, maximum: 15 },
+            square: { type: "number", minimum: 0, maximum: 15 },
+            trine: { type: "number", minimum: 0, maximum: 15 },
+            quincunx: { type: "number", minimum: 0, maximum: 15 },
+            opposition: { type: "number", minimum: 0, maximum: 15 },
           },
         },
         AstroCartoInput: {

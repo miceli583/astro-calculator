@@ -261,6 +261,127 @@ describe("§1.3 transit and synastry orb tables", () => {
       expect(DEFAULT_SYNASTRY_ORBS[type], type).toBeGreaterThan(DEFAULT_TRANSIT_ORBS[type]);
     }
   });
+
+  // The tables above are DEFAULTS, not ceilings: `/api/v1/astrology/transits`
+  // takes an `orbs` override, at parity with `/api/v1/transit/natal` and
+  // `/api/v1/synastry`. The point of the override is that it changes the
+  // answer, so that — not merely that the field is accepted — is what these
+  // pin. A test that only asserts the call succeeds would pass against a
+  // schema field wired to nothing.
+
+  it("a custom orb table changes which transits are reported", () => {
+    const when = { transit_datetime: "2026-08-12T12:00:00", transit_timezone: "UTC" };
+    const base = calculateTransits({
+      natal: DIANA.birth,
+      ...when,
+    } as Parameters<typeof calculateTransits>[0]);
+    const wide = calculateTransits({
+      natal: DIANA.birth,
+      ...when,
+      orbs: { conjunction: 9, opposition: 9, square: 9, trine: 9, sextile: 9, quincunx: 9 },
+    } as Parameters<typeof calculateTransits>[0]);
+    const tight = calculateTransits({
+      natal: DIANA.birth,
+      ...when,
+      orbs: { conjunction: 0.5, opposition: 0.5, square: 0.5, trine: 0.5, sextile: 0.5, quincunx: 0.5 },
+    } as Parameters<typeof calculateTransits>[0]);
+
+    // Strict inequalities in both directions. `toBeLessThanOrEqual` would be
+    // satisfied by an override that does nothing at all.
+    expect(wide.aspectsToNatal.length).toBeGreaterThan(base.aspectsToNatal.length);
+    expect(tight.aspectsToNatal.length).toBeLessThan(base.aspectsToNatal.length);
+
+    // ...and the widened list is a superset of the default one, rather than a
+    // differently-shaped list of the same size.
+    const key = (a: { from: string; to: string; type: string }) => `${a.from}|${a.type}|${a.to}`;
+    const wideKeys = new Set(wide.aspectsToNatal.map(key));
+    for (const a of base.aspectsToNatal) {
+      expect(wideKeys.has(key(a)), `widening dropped ${key(a)}`).toBe(true);
+    }
+  });
+
+  it("a partial override leaves the other aspects on their defaults", () => {
+    const when = { transit_datetime: "2026-08-12T12:00:00", transit_timezone: "UTC" };
+    const base = calculateTransits({
+      natal: DIANA.birth,
+      ...when,
+    } as Parameters<typeof calculateTransits>[0]);
+    const partial = calculateTransits({
+      natal: DIANA.birth,
+      ...when,
+      orbs: { conjunction: 9 },
+    } as Parameters<typeof calculateTransits>[0]);
+
+    // The overridden aspect moves...
+    const conj = (r: typeof base) => r.aspectsToNatal.filter((a) => a.type === "conjunction");
+    expect(conj(partial).length).toBeGreaterThan(conj(base).length);
+    for (const a of conj(partial)) expect(a.orb).toBeLessThanOrEqual(9);
+
+    // ...and every other aspect stays inside the default table, which is what
+    // "merge over the defaults" means as opposed to "replace them".
+    for (const a of partial.aspectsToNatal) {
+      if (a.type === "conjunction") continue;
+      expect(a.orb, `${a.from} ${a.type} ${a.to}`).toBeLessThanOrEqual(
+        DEFAULT_TRANSIT_ORBS[a.type as AspectType],
+      );
+    }
+  });
+
+  it("F9's agreement between the two transit paths survives a custom table", () => {
+    // F9 pinned that the two endpoints answer the same question the same way
+    // on the DEFAULT table. An override is a new way for them to drift apart,
+    // so the same invariant is re-asserted with a non-default table on both.
+    const orbs = { conjunction: 6, opposition: 6, square: 5, trine: 5, sextile: 4, quincunx: 3 };
+    const t = calculateTransits({
+      natal: DIANA.birth,
+      transit_datetime: "2026-08-12T12:00:00",
+      transit_timezone: "UTC",
+      orbs,
+    } as Parameters<typeof calculateTransits>[0]);
+    const natal = calculateNatalChart(DIANA.birth);
+
+    const overlay = computeOverlay(
+      { points: natal.planets.map((p) => ({ name: p.name, longitude: p.longitude, speed: p.speed })) },
+      {
+        points: t.transitingPlanets.map((p) => ({
+          name: p.name,
+          longitude: p.longitude,
+          speed: p.speed,
+        })),
+      },
+      { orbs } as Parameters<typeof computeOverlay>[2],
+    );
+
+    const key = (from: string, to: string, type: string) => `${from}|${type}|${to}`;
+    const mine = new Set(t.aspectsToNatal.map((a) => key(a.from, a.to, a.type)));
+    const theirs = new Set(overlay.aspects.map((a) => key(a.transitPoint, a.natalPoint, a.aspect)));
+
+    expect(mine.size).toBeGreaterThan(10);
+    expect([...mine].filter((k) => !theirs.has(k)), "hits only /astrology/transits reports").toEqual([]);
+    expect([...theirs].filter((k) => !mine.has(k)), "hits only /transit/natal reports").toEqual([]);
+  });
+
+  it("the 15° schema cap cannot make two aspect windows overlap", () => {
+    // What makes "scan the table, take the first hit" safe under CALLER-chosen
+    // orbs. §1.4 proves it for the fixed natal table; this is the same property
+    // for the widest table the schema will accept. The closest two exact angles
+    // that are not conjunction/sextile are 30° apart, so a 15° cap lets two
+    // windows touch at a single separation but never properly overlap — and the
+    // two code paths scan the table in different orders (`ASPECT_DEFS` vs the
+    // key order of `ASPECT_ANGLES`), which only stays invisible while that
+    // holds.
+    const MAX_ORB = 15;
+    const entries = Object.entries(ASPECT_ANGLES) as [AspectType, number][];
+    for (let i = 0; i < entries.length; i++) {
+      for (let j = i + 1; j < entries.length; j++) {
+        const gap = Math.abs(entries[i][1] - entries[j][1]);
+        expect(
+          gap,
+          `${entries[i][0]} and ${entries[j][0]} could overlap at the cap`,
+        ).toBeGreaterThanOrEqual(2 * MAX_ORB);
+      }
+    }
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
