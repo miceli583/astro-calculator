@@ -19,6 +19,7 @@ import {
   DEFAULT_TRANSIT_ORBS,
   MOTION_SAMPLE_DAYS,
   STATIONARY_REL_SPEED_DEG_PER_DAY,
+  type AspectType,
 } from "../constants/orbs";
 import {
   MODERN_RULERS,
@@ -690,6 +691,14 @@ export interface TransitInput {
   transit_datetime: string; // local ISO at the natal location, or UTC
   transit_timezone: string;
   planets?: PlanetName[];
+  /**
+   * Per-aspect orb overrides, merged over `DEFAULT_TRANSIT_ORBS`. Structurally
+   * identical to `OverlayOptions["orbs"]`, which the transit/natal and synastry
+   * paths take — spelled out rather than imported because `overlay.ts` imports
+   * this module and the reverse import would close the cycle that orb table
+   * lived in before F9.
+   */
+  orbs?: Partial<Record<AspectType, number>>;
 }
 
 export interface TransitChart {
@@ -714,12 +723,18 @@ export interface TransitChart {
  * @param input.transit_datetime   ISO 8601 local datetime of the transit moment.
  * @param input.transit_timezone   IANA timezone of `transit_datetime`.
  * @param input.planets            Optional subset of bodies to include.
+ * @param input.orbs               Optional per-aspect orb overrides, merged OVER
+ *   `DEFAULT_TRANSIT_ORBS` — an unlisted aspect keeps its default rather than
+ *   being dropped. Same contract as `/api/v1/transit/natal` and
+ *   `/api/v1/synastry`, which is the point: the override must not become a
+ *   third way to make the two transit paths disagree (cf. F9).
  * @returns Both Julian Days, the transit planet positions in natal houses,
  *   and the transit-to-natal aspect list.
  */
 export function calculateTransits(input: TransitInput): TransitChart {
   const natalChart = calculateNatalChart(input.natal);
   const transitJd = julianDayUT(input.transit_datetime, input.transit_timezone);
+  const orbs = { ...DEFAULT_TRANSIT_ORBS, ...input.orbs };
   const planetList = input.planets ?? DEFAULT_PLANETS;
   const { positions: tpos, unavailable: tUnavailable } = calcAllPlanets(transitJd, planetList);
   const transitList = planetList.filter((n) => tpos[n] != null);
@@ -746,9 +761,10 @@ export function calculateTransits(input: TransitInput): TransitChart {
         // `ASPECT_DEFS`. Which orbs a transit is judged by is a property of the
         // question, not of the URL the caller happened to reach for: this
         // endpoint and `/api/v1/transit/natal` answer the same question and
-        // must answer it the same way (F9).
+        // must answer it the same way (F9) — including when the caller supplies
+        // the table.
         const orb = Math.abs(sep - def.angle);
-        if (orb <= DEFAULT_TRANSIT_ORBS[def.type]) {
+        if (orb <= orbs[def.type]) {
           aspectsToNatal.push({
             from: t.name,
             to: n.name,
