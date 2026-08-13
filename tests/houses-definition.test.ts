@@ -585,22 +585,27 @@ describe("L2 — house membership follows the documented rule", () => {
   // traversed forward in zodiacal order. Checked through the real calculator,
   // not a reimplementation of the rule.
   //
-  // Pre-1800 charts are excluded because they cannot be built at all: F1
-  // (TODO.md, docs/accuracy.md §6) makes calculateNatalChart throw on the
-  // Moshier-fallback warning. That is an L1 finding, deliberately unfixed, and
-  // it is asserted below rather than quietly worked around — when F1 is
-  // dispositioned this exclusion must be removed and the charts folded back in.
+  // Pre-1800 charts USED to be excluded here: F1 made calculateNatalChart throw
+  // on sweph's Moshier-fallback warning, so they could not be built at all. That
+  // exclusion was asserted rather than commented, which is what forced it to be
+  // removed when F1 was fixed. House membership is a geometric property and has
+  // nothing to do with which ephemeris supplied the longitudes, so these charts
+  // belong in the membership test on exactly the same terms as every other one.
   const JD_1800 = 2378496.5;
-  const BUILDABLE = DEFINED.filter((fx) => fx.jd.ut >= JD_1800);
+  const BUILDABLE = DEFINED;
   const PRE_1800 = FIXTURES.filter((fx) => fx.jd.ut < JD_1800);
 
-  it("pre-1800 charts still throw — F1, excluded here for that reason and no other", () => {
-    expect(PRE_1800.length, "no pre-1800 fixture, so this exclusion is untested").toBeGreaterThan(0);
+  it("pre-1800 charts build and are covered by the membership test below", () => {
+    expect(PRE_1800.length, "no pre-1800 fixture, so this claim is untested").toBeGreaterThan(0);
+    const covered = new Set(BUILDABLE.map((fx) => fx.id));
     for (const fx of PRE_1800) {
-      expect(
-        () => calculateNatalChart({ ...fx.input, house_system: "placidus" }),
-        `${fx.id}: F1 appears fixed — fold the pre-1800 charts back into the membership test`
-      ).toThrow();
+      const chart = calculateNatalChart({ ...fx.input, house_system: "placidus" });
+      expect(chart.houses.cusps).toHaveLength(12);
+      // Non-vacuity: being buildable is worth little if the fixture is not
+      // actually one of the charts the membership test iterates.
+      if (DEFINED.some((d) => d.id === fx.id)) {
+        expect(covered.has(fx.id), `${fx.id} builds but is not in the membership set`).toBe(true);
+      }
     }
   });
 

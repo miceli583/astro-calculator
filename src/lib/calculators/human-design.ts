@@ -65,7 +65,16 @@ export interface ChartHalf {
 }
 
 function activationsFor(jd: number): Activation[] {
-  const positions = calcAllPlanets(jd, HD_PLANETS);
+  const { positions, unavailable } = calcAllPlanets(jd, HD_PLANETS);
+  // Human Design needs every gate activation to define centres and channels;
+  // a partial body set would yield a structurally different (wrong) bodygraph
+  // rather than a slightly incomplete one, so this path stays strict.
+  if (unavailable.length > 0) {
+    throw new Error(
+      `Human Design requires all ${HD_PLANETS.length} bodies; ephemeris unavailable for: ` +
+        unavailable.map((u) => `${u.name} (${u.reason})`).join(", ")
+    );
+  }
   const out: Activation[] = [];
   for (const p of HD_PLANETS) {
     const longitude = positions[p].longitude;

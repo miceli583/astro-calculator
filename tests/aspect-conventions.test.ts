@@ -57,10 +57,13 @@ import { join } from "node:path";
 //  Charts under test
 // ─────────────────────────────────────────────────────────────────────────────
 
-// The four reference charts plus the twenty hostile L1/L2 fixtures, minus the
-// pre-1800 ones: F1 (`docs/accuracy.md` §6) makes `calculateNatalChart` throw on
-// those, and the exclusion is asserted at the bottom of this file so a fix to F1
-// forces them back in rather than leaving them quietly skipped.
+// The four reference charts plus all twenty hostile L1/L2 fixtures. The
+// pre-1800 ones used to be excluded: F1 made `calculateNatalChart` throw on
+// them, because sweph's data-file warning was read as an error. That exclusion
+// was asserted rather than merely commented, so fixing F1 broke the assertion
+// and forced these charts back in — which is exactly what happened.
+// `JD_1800` now marks the ephemeris BOUNDARY (Moshier below, Swiss above),
+// not a buildability boundary.
 const JD_1800 = 2378496.5;
 
 interface HorizonsFixture {
@@ -80,7 +83,7 @@ const HORIZONS: HorizonsFixture[] = readdirSync(HORIZONS_DIR)
   .map((f) => JSON.parse(readFileSync(join(HORIZONS_DIR, f), "utf8")) as HorizonsFixture)
   .sort((a, b) => a.id.localeCompare(b.id));
 
-const BUILDABLE = HORIZONS.filter((f) => f.jd.ut >= JD_1800);
+const BUILDABLE = HORIZONS;
 const PRE_1800 = HORIZONS.filter((f) => f.jd.ut < JD_1800);
 
 const REFERENCE = [DIANA, EINSTEIN, JOBS, MANDELA];
@@ -964,16 +967,34 @@ describe("§8 findings (characterization — rewrite on disposition)", () => {
 //  Deliberate exclusion (inherited from L1's F1)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("deliberate exclusions", () => {
-  // Asserting the exclusion means a fix to F1 fails HERE and forces these
-  // charts back into every test above, rather than leaving them silently unrun.
-  it("pre-1800 fixtures are excluded because F1 still makes them throw", () => {
+describe("pre-1800 charts (formerly excluded — F1 fixed)", () => {
+  // These fixtures were excluded from every test above while F1 stood. They are
+  // now in `BUILDABLE`, so they run through the whole file; what remains here is
+  // the contract that made re-including them safe.
+  it("build without throwing, and say which ephemeris answered", () => {
     expect(PRE_1800.length).toBeGreaterThan(0);
     for (const fx of PRE_1800) {
-      expect(
-        () => calculateNatalChart(fx.input as Parameters<typeof calculateNatalChart>[0]),
-        `${fx.id} no longer throws — F1 may be fixed; re-include it above`,
-      ).toThrow();
+      const chart = calculateNatalChart(
+        fx.input as Parameters<typeof calculateNatalChart>[0],
+      );
+      expect(chart.planets.length, `${fx.id} produced no planets`).toBeGreaterThan(5);
+      // The whole point of the disposition: the fallback is LABELLED. A chart
+      // that quietly answered from Moshier while claiming Swiss precision would
+      // be a worse outcome than the 500 this replaced.
+      expect(chart.ephemeris, `${fx.id} must report Moshier below 1800`).toBe("moshier");
+    }
+  });
+
+  it("post-1800 charts report Swiss, so the label is not a constant", () => {
+    // Guards the obvious wrong fix: hardcoding `ephemeris: "moshier"`, or
+    // reporting a label nobody derived from sweph's actual return flag.
+    const post = HORIZONS.filter((f) => f.jd.ut >= JD_1800);
+    expect(post.length).toBeGreaterThan(0);
+    for (const fx of post) {
+      const chart = calculateNatalChart(
+        fx.input as Parameters<typeof calculateNatalChart>[0],
+      );
+      expect(chart.ephemeris, `${fx.id} is inside the Swiss data range`).toBe("swiss");
     }
   });
 });

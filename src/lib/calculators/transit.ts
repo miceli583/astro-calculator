@@ -5,7 +5,13 @@
 //
 // For the transit event scanner see `transit-events.ts`.
 
-import { calcAllPlanets, julianDayUT, type PlanetName } from "../ephemeris/client";
+import {
+  calcAllPlanets,
+  julianDayUT,
+  summarizeEphemeris,
+  type EphemerisSource,
+  type PlanetName,
+} from "../ephemeris/client";
 import { calculateNatalChart, longitudeToSign, type NatalChart, type NatalInput, type SignPosition } from "./astrology";
 import {
   buildNatalOverlayPoints,
@@ -54,6 +60,10 @@ export interface TransitSkyPoint {
 export interface TransitSkyChart {
   jd_ut: number;
   planets: TransitSkyPoint[];
+  /** Which ephemeris answered for this snapshot (F1). */
+  ephemeris: EphemerisSource | "mixed";
+  /** Requested bodies with no ephemeris at this instant (F2). */
+  unavailableBodies?: { name: PlanetName; longitude: null; reason: string }[];
   /**
    * Aspect patterns in the transiting sky (sign-based only — a pure sky
    * snapshot has no location, hence no houses). The derived South Node is
@@ -71,9 +81,12 @@ export interface TransitSkyChart {
 export function calculateTransitSky(input: TransitSkyInput): TransitSkyChart {
   const jd = julianDayUT(input.datetime, input.timezone);
   const planetList = input.planets ?? DEFAULT_TRANSIT_PLANETS;
-  const positions = calcAllPlanets(jd, planetList);
+  const { positions, unavailable } = calcAllPlanets(jd, planetList);
+  // A body with no ephemeris at this instant drops out of the sky list rather
+  // than failing the snapshot; `unavailableBodies` says which and why (F1/F2).
+  const availableList = planetList.filter((n) => positions[n] != null);
 
-  const planets: TransitSkyPoint[] = planetList.map((name) => {
+  const planets: TransitSkyPoint[] = availableList.map((name) => {
     const p = positions[name];
     const g = longitudeToGate(p.longitude);
     return {
@@ -111,7 +124,15 @@ export function calculateTransitSky(input: TransitSkyInput): TransitSkyChart {
       .map((p) => ({ name: p.name, longitude: p.longitude }))
   );
 
-  return { jd_ut: jd, planets, patterns };
+  return {
+    jd_ut: jd,
+    planets,
+    ephemeris: summarizeEphemeris(positions) ?? "swiss",
+    ...(unavailable.length > 0
+      ? { unavailableBodies: unavailable.map((u) => ({ ...u, longitude: null as null })) }
+      : {}),
+    patterns,
+  };
 }
 
 export interface TransitToNatalInput {

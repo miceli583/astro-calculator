@@ -3,6 +3,19 @@
 
 import { API_VERSION } from "../version";
 
+// Repeated verbatim on every endpoint that returns computed positions. Responses
+// are description-only (see TODO.md), so this prose IS the contract for the
+// `ephemeris` / `unavailableBodies` pair — it must say the same thing everywhere.
+const EPHEMERIS_PROSE =
+  "`ephemeris` names the data source that actually produced the positions: `\"swiss\"`, " +
+  "`\"moshier\"`, `\"jpl\"`, or `\"mixed\"`. Dates outside the shipped Swiss Ephemeris data " +
+  "files (before 1800 CE) are answered from the Moshier analytic theory and labelled " +
+  "`\"moshier\"` rather than rejected — arc-second-level agreement for the Sun and planets, " +
+  "coarser for the Moon. `unavailableBodies` is OPTIONAL (key absent when every requested " +
+  "body was computed) and lists each body the ephemeris refuses for that instant as " +
+  "`{ name, longitude: null, reason }`; Chiron before 1800 is the common case, since no " +
+  "ephemeris for it exists there at all.";
+
 export interface OpenAPISpec {
   openapi: string;
   info: Record<string, unknown>;
@@ -47,7 +60,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             content: { "application/json": { schema: { $ref: "#/components/schemas/NatalInput" } } },
           },
           responses: {
-            "200": { description: "Natal chart with planets, houses, aspects, aspect patterns (stellium, grand trine, T-square, grand cross, yod, kite, mystic rectangle), and the chart ruler (ruler of the Ascendant sign with placement + aspects). `partOfFortune` is OPTIONAL: its formula requires both luminaries, so the field is omitted entirely (key absent) when `planets` excludes the Sun or the Moon. Its `isDayBirth` is determined by the Sun's position relative to the horizon and does not vary with `house_system`." },
+            "200": { description: "Natal chart with planets, houses, aspects, aspect patterns (stellium, grand trine, T-square, grand cross, yod, kite, mystic rectangle), and the chart ruler (ruler of the Ascendant sign with placement + aspects). `partOfFortune` is OPTIONAL: its formula requires both luminaries, so the field is omitted entirely (key absent) when `planets` excludes the Sun or the Moon. Its `isDayBirth` is determined by the Sun's position relative to the horizon and does not vary with `house_system`. " + EPHEMERIS_PROSE },
             "422": { description: "Invalid input" },
           },
         },
@@ -62,7 +75,9 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
           responses: {
             "200": {
               description:
-                "Transit chart. Aspects to the natal chart use the TRANSIT orb table (conjunction/opposition/square 3°, trine/sextile 2°, quincunx 1.5°) — the same table as `/api/v1/transit/natal`, so both endpoints return the same aspects for the same moment. Each aspect carries `motion`: `\"applying\"`, `\"separating\"`, or `\"stationary\"` when the two bodies' relative speed is below 1e-4°/day. The boolean `applying` is OPTIONAL and is omitted entirely (key absent) when `motion` is `\"stationary\"`, since neither direction would be a true claim. This endpoint does not yet accept an `orbs` override; use `/api/v1/transit/natal` for custom orbs.",
+                "Transit chart. Aspects to the natal chart use the TRANSIT orb table (conjunction/opposition/square 3°, trine/sextile 2°, quincunx 1.5°) — the same table as `/api/v1/transit/natal`, so both endpoints return the same aspects for the same moment. Each aspect carries `motion`: `\"applying\"`, `\"separating\"`, or `\"stationary\"` when the two bodies' relative speed is below 1e-4°/day. The boolean `applying` is OPTIONAL and is omitted entirely (key absent) when `motion` is `\"stationary\"`, since neither direction would be a true claim. This endpoint does not yet accept an `orbs` override; use `/api/v1/transit/natal` for custom orbs. " +
+                EPHEMERIS_PROSE +
+                " The transit sky is sourced separately from the natal chart, so it reports `transitEphemeris` and `unavailableTransitBodies` alongside the natal chart's own `ephemeris` and `unavailableBodies`.",
             },
           },
         },
@@ -74,7 +89,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/BirthData" } } },
           },
-          responses: { "200": { description: "Planet longitudes, signs, HD gates, and sky-wide aspect patterns (sign-based) for the given moment" } },
+          responses: { "200": { description: "Planet longitudes, signs, HD gates, and sky-wide aspect patterns (sign-based) for the given moment. " + EPHEMERIS_PROSE } },
         },
       },
       "/api/v1/transit/natal": {
@@ -134,7 +149,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/ProgressedInput" } } },
           },
-          responses: { "200": { description: "Progressed inner-planet positions for the requested age" } },
+          responses: { "200": { description: "Progressed inner-planet positions for the requested age. " + EPHEMERIS_PROSE } },
         },
       },
       "/api/v1/astrology/solar-return": {
@@ -144,7 +159,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/SolarReturnInput" } } },
           },
-          responses: { "200": { description: "Full natal-style chart cast at the moment the transit Sun returns to the natal Sun longitude. As with the natal chart, `partOfFortune` is optional and omitted when a luminary is absent from the requested `planets` subset." } },
+          responses: { "200": { description: "Full natal-style chart cast at the moment the transit Sun returns to the natal Sun longitude. As with the natal chart, `partOfFortune` is optional and omitted when a luminary is absent from the requested `planets` subset. " + EPHEMERIS_PROSE } },
         },
       },
       "/api/v1/astrology/planetary-return": {
@@ -156,7 +171,7 @@ export function buildOpenAPISpec(baseUrl: string): OpenAPISpec {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/PlanetaryReturnInput" } } },
           },
-          responses: { "200": { description: "Full natal-style chart cast at the return moment, with the planet, natal longitude, and return JD-UT. As with the natal chart, `partOfFortune` is optional and omitted when a luminary is absent from the requested `planets` subset." } },
+          responses: { "200": { description: "Full natal-style chart cast at the return moment, with the planet, natal longitude, and return JD-UT. As with the natal chart, `partOfFortune` is optional and omitted when a luminary is absent from the requested `planets` subset. " + EPHEMERIS_PROSE } },
         },
       },
       "/api/v1/astrocartography": {

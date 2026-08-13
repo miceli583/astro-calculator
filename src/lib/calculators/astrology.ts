@@ -9,6 +9,8 @@ import {
   julianDayUTResolved,
   type HouseSystem,
   type PlanetName,
+  summarizeEphemeris,
+  type EphemerisSource,
   type PlanetPosition,
 } from "../ephemeris/client";
 import type { BirthData } from "../types/birth-data";
@@ -113,6 +115,23 @@ export interface NatalChart {
    * pass `rulership: "traditional"` for the classical table.
    */
   chartRuler: ChartRuler;
+  /**
+   * Which ephemeris answered for this chart's positions — `"swiss"` for the
+   * 1800–2399 range this deployment ships data files for, `"moshier"` for
+   * instants outside it, where sweph falls back to its built-in analytic theory
+   * at roughly arcsecond rather than milliarcsecond accuracy.
+   *
+   * Reported on every chart, not only the fallback ones, so a consumer never
+   * has to infer precision from the date. See finding F1.
+   */
+  ephemeris: EphemerisSource | "mixed";
+  /**
+   * Bodies the caller asked for that have no ephemeris at this instant, with
+   * sweph's reason. Present only when non-empty. Chiron before 1800 is the
+   * real-world case: sweph refuses it outright, so it is reported here rather
+   * than silently dropped or given a fabricated position (finding F2).
+   */
+  unavailableBodies?: { name: PlanetName; longitude: null; reason: string }[];
   /** Non-fatal warnings about the chart (e.g., high-latitude house distortion). */
   warnings: string[];
 }
@@ -421,7 +440,7 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
   const planetList = input.planets ?? DEFAULT_PLANETS;
 
   const { jd, kind: timeKind } = julianDayUTResolved(input.datetime, input.timezone);
-  const positions = calcAllPlanets(jd, planetList);
+  const { positions, unavailable } = calcAllPlanets(jd, planetList);
   const houses = calcHouses(jd, input.latitude, input.longitude, houseSystem);
 
   const warnings: string[] = [];
@@ -446,7 +465,19 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
     );
   }
 
-  const planets: NatalPlanet[] = planetList.map((name) => {
+  // Bodies sweph refused are reported, not fabricated and not silently
+  // dropped: the caller asked for them, so silence would be indistinguishable
+  // from "not requested" (the same reasoning that made F8 an omission — there
+  // absence WAS the honest answer; here the request itself is the context).
+  if (unavailable.length > 0) {
+    warnings.push(
+      `No ephemeris for ${unavailable.map((u) => u.name).join(", ")} at this date; ` +
+      `reported in unavailableBodies with a null longitude rather than omitted.`
+    );
+  }
+  const availableList = planetList.filter((n) => positions[n] != null);
+
+  const planets: NatalPlanet[] = availableList.map((name) => {
     const p: PlanetPosition = positions[name];
     return {
       name,
@@ -515,6 +546,16 @@ export function calculateNatalChart(input: NatalInput): NatalChart {
     aspects,
     patterns: detectAspectPatterns(patternPointsFromPlanets(planets)),
     chartRuler: computeChartRuler(ascendantSign, planets, aspects, input.rulership),
+    ephemeris: summarizeEphemeris(positions) ?? "swiss",
+    ...(unavailable.length > 0
+      ? {
+          unavailableBodies: unavailable.map((u) => ({
+            name: u.name,
+            longitude: null as null,
+            reason: u.reason,
+          })),
+        }
+      : {}),
     warnings,
   };
 }
@@ -530,6 +571,10 @@ export interface TransitChart {
   natal_jd_ut: number;
   transit_jd_ut: number;
   transitingPlanets: NatalPlanet[];
+  /** Which ephemeris answered for the TRANSIT positions (F1). */
+  transitEphemeris: EphemerisSource | "mixed";
+  /** Requested transiting bodies with no ephemeris at that instant (F2). */
+  unavailableTransitBodies?: { name: PlanetName; longitude: null; reason: string }[];
   aspectsToNatal: (Aspect & { fromTransit: boolean })[];
 }
 
@@ -551,9 +596,10 @@ export function calculateTransits(input: TransitInput): TransitChart {
   const natalChart = calculateNatalChart(input.natal);
   const transitJd = julianDayUT(input.transit_datetime, input.transit_timezone);
   const planetList = input.planets ?? DEFAULT_PLANETS;
-  const tpos = calcAllPlanets(transitJd, planetList);
+  const { positions: tpos, unavailable: tUnavailable } = calcAllPlanets(transitJd, planetList);
+  const transitList = planetList.filter((n) => tpos[n] != null);
 
-  const transitingPlanets: NatalPlanet[] = planetList.map((name) => {
+  const transitingPlanets: NatalPlanet[] = transitList.map((name) => {
     const p = tpos[name];
     return {
       name,
@@ -605,6 +651,15 @@ export function calculateTransits(input: TransitInput): TransitChart {
     natal_jd_ut: natalChart.jd_ut,
     transit_jd_ut: transitJd,
     transitingPlanets,
+    transitEphemeris: summarizeEphemeris(tpos) ?? "swiss",
+    ...(tUnavailable.length > 0
+      ? {
+          unavailableTransitBodies: tUnavailable.map((u) => ({
+            ...u,
+            longitude: null as null,
+          })),
+        }
+      : {}),
     aspectsToNatal,
   };
 }
@@ -625,6 +680,10 @@ export interface ProgressedChart {
   progressed_jd_ut: number;
   years: number;
   planets: { name: PlanetName; longitude: number; sign: SignPosition; retrograde: boolean }[];
+  /** Which ephemeris answered at the progressed instant (F1). */
+  ephemeris: EphemerisSource | "mixed";
+  /** Requested bodies with no ephemeris at the progressed instant (F2). */
+  unavailableBodies?: { name: PlanetName; longitude: null; reason: string }[];
 }
 
 const DEFAULT_PROGRESSED_PLANETS: readonly PlanetName[] = [
@@ -647,9 +706,10 @@ export function calculateProgressions(input: ProgressedInput): ProgressedChart {
   const natalJd = julianDayUT(input.datetime, input.timezone);
   const progressedJd = natalJd + input.years;
   const planetList = input.planets ?? DEFAULT_PROGRESSED_PLANETS;
-  const positions = calcAllPlanets(progressedJd, planetList);
+  const { positions, unavailable } = calcAllPlanets(progressedJd, planetList);
+  const availableList = planetList.filter((n) => positions[n] != null);
 
-  const planets = planetList.map((name) => {
+  const planets = availableList.map((name) => {
     const p = positions[name];
     return {
       name,
@@ -664,6 +724,10 @@ export function calculateProgressions(input: ProgressedInput): ProgressedChart {
     progressed_jd_ut: progressedJd,
     years: input.years,
     planets,
+    ephemeris: summarizeEphemeris(positions) ?? "swiss",
+    ...(unavailable.length > 0
+      ? { unavailableBodies: unavailable.map((u) => ({ ...u, longitude: null as null })) }
+      : {}),
   };
 }
 
