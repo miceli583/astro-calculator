@@ -98,7 +98,7 @@ table. If a luminary weighting is ever added it is a breaking change.
 
 ### 1.3 Orbs — transit and synastry scale
 
-Two further tables exist in `src/lib/calculators/overlay.ts`, and they are
+Two further tables exist in `src/lib/constants/orbs.ts`, and they are
 deliberately tighter than natal:
 
 | Aspect | Natal | Synastry | Transit |
@@ -118,10 +118,25 @@ themselves (78 pairs). A synastry or transit overlay compares 13 against 13
 Narrowing the orb as the pair count rises keeps the returned lists comparable in
 length and the transit list temporally meaningful.
 
-Both tables are caller-overridable per aspect (`orbs` in the synastry and
-transit request bodies). The natal table is **not** overridable.
+**Which table applies is a property of the question, not of the URL.** Every
+surface that answers "which transiting bodies aspect this natal chart" uses the
+transit table, whichever endpoint it is reached through:
+`/api/v1/astrology/transits`, `/api/v1/transit/natal`, and the event scanner
+behind `/api/v1/transit/events` all read the same constant. That was not true
+before **F9**, and the two paths returned lists differing threefold for the same
+moment. Both now return the same 18 aspects for the reference case below.
 
-> **Finding.** `/api/v1/transit` does not use the transit table — see **F9**.
+The tables live in `src/lib/constants/orbs.ts` rather than in a calculator
+because `calculators/astrology.ts` cannot import from `calculators/overlay.ts` —
+overlay already imports from astrology, and the cycle would be a runtime one.
+That import direction is the structural reason the drift happened, so the fix
+is placement, not vigilance.
+
+Overridability is **not** uniform, and this is a gap rather than a convention:
+the synastry and transit-to-natal request bodies take an `orbs` object,
+`/api/v1/astrology/transits` takes no such field, and the natal table is not
+overridable by design. Callers needing custom transit orbs should use
+`/api/v1/transit/natal` today.
 
 ### 1.4 One aspect per pair
 
@@ -155,24 +170,52 @@ is the number a future addition has to respect.
 ### 1.5 Applying and separating
 
 An aspect is **applying** when it is getting closer to exact, **separating**
-when it is moving apart.
+when it is moving apart, and **stationary** when the two bodies have no
+meaningful motion relative to each other and it is doing neither.
 
-Determined by re-evaluating the separation after advancing both bodies along
-their known daily motion by **0.01 day (14.4 minutes)** and asking whether the
-orb shrank. Retrograde motion is handled naturally, because the speed carries
-its own sign.
+Direction is reported in two fields, computed once by `aspectMotion` in
+`src/lib/calculators/astrology.ts` and shared by every surface:
 
-Two consequences of the finite step, both accepted:
+| Field | Type | Presence |
+|---|---|---|
+| `motion` | `"applying" \| "separating" \| "stationary"` | always present on natal-style aspects; on overlay hits, absent when the moving point carried no speed |
+| `applying` | `boolean` | **omitted (key absent)** when `motion` is `"stationary"`, or when direction is unknown |
 
-- A body within 14.4 minutes of a **station** has a speed near zero and its
-  applying flag is effectively a coin-flip. This is inherent to any finite-step
-  rule and is not worth a special case.
-- An **exactly partile** aspect (orb 0) reports `applying: false`, because the
-  test is a strict shrink and the orb cannot shrink below zero. Reading this as
-  "separating" is wrong; read `applying: false` as "not currently closing".
+`applying` is retained for consumers that only ever asked a yes/no question, but
+it cannot express the third case, so it is absent there rather than guessing.
+`motion` absent and `motion: "stationary"` are different claims: absent means
+no speed was supplied and the direction is unknown; `"stationary"` means the
+speeds were known and were equal within tolerance.
 
-> **Finding.** `/api/v1/transit` reports `applying: false` for every hit
-> regardless of motion — see **F10**.
+The rule: advance both bodies along their known daily motion by **0.01 day
+(14.4 minutes)** and ask whether the orb shrank. Retrograde motion is handled
+naturally, because the speed carries its own sign.
+
+In a transit or synastry overlay the **framing chart's points are advanced at
+speed 0**, deliberately. That chart is a fixed moment; a natal point's `speed`
+is the motion the body had at birth — data about that instant, carried for the
+retrograde flag, not motion happening now. Feeding it in would make a transit's
+direction depend on how fast the natal Sun happened to be moving decades ago.
+
+**Stationary tolerance.** Relative speed below
+`STATIONARY_REL_SPEED_DEG_PER_DAY` = **1e-4 °/day** (0.36″/day). The threshold
+is measured, not chosen for feel: over 40 charts spanning 1900–2020 (1304
+aspecting pairs, excluding the tautological node pair of §1.7), a 0.01 °/day
+tolerance calls 40 pairs stationary — including a Saturn–Pluto pair at
+0.0049 °/day, which is moving; 0.001 calls 7; 0.0001 calls 2. The outer bodies
+legitimately run at 0.008–0.03 °/day, so a loose tolerance would report Chiron,
+the node, Uranus, Neptune and Pluto as stationary essentially always. Calling a
+moving body stationary is as much a false claim as calling a still one
+separating, so the tolerance is deliberately strict: 0.36″/day cannot shift the
+orb by as much as the two decimal places orbs are read to, even over a full day.
+
+One consequence of the finite step, accepted: a body within 14.4 minutes of a
+true **station** has a near-zero speed, and if its speed is not equal to the
+other body's within tolerance the applying flag is close to a coin-flip. That is
+inherent to any finite-step rule. An **exactly partile** aspect (orb 0) between
+two bodies with different speeds reports `separating`, because the test is a
+strict shrink and the orb cannot shrink below zero; read that as "not currently
+closing" rather than as a claim about the past.
 
 ### 1.6 Which points participate
 
@@ -536,45 +579,84 @@ always compute the Sun and Moon internally regardless of the requested subset,
 since the Ascendant is always computed anyway; or reject the request. Silently
 returning the Ascendant is the one option that cannot be defended.
 
-### F9 — `/api/v1/transit` uses natal orbs, `/api/v1/transit/natal` uses transit orbs
+### F9 — `/api/v1/astrology/transits` used natal orbs, `/api/v1/transit/natal` used transit orbs — **FIXED**
 
-Two endpoints answer the same question — which transiting bodies aspect this
-natal chart — through two different code paths with two different orb tables.
-`calculateTransits` scans `ASPECT_DEFS` (the natal table, §1.2); the overlay
-path used by `/api/v1/transit/natal` uses `DEFAULT_TRANSIT_ORBS` (§1.3), which
-is 2–2.7× tighter.
+**Resolved** by moving both orb tables to `src/lib/constants/orbs.ts` and
+pointing `calculateTransits` at `DEFAULT_TRANSIT_ORBS`. The convention is now
+pinned in §1.3: the table is a property of the question, not of the URL.
 
-Measured (Diana's natal chart, transits for 2026-08-12 12:00 UTC):
+> **Attribution corrected.** This finding was first filed against
+> `/api/v1/transit`. That is the wrong endpoint. `/api/v1/transit` returns a
+> sky snapshot and computes **no** transit-to-natal aspects at all; the
+> defective path was `calculateTransits`, which serves
+> **`/api/v1/astrology/transits`**. The measurements below are unchanged — they
+> were always taken from `calculateTransits` — but the endpoint named in the
+> original text was not the one a consumer would have hit.
+>
+> The finding also claimed the endpoint "ignores the caller's `orbs` override".
+> That is false: `transitInputSchema` has no `orbs` field, so there is no
+> override to ignore. The real gap is that `/api/v1/astrology/transits` accepts
+> no `orbs` where `/api/v1/transit/natal` and `/api/v1/synastry` do — a parity
+> gap, filed separately rather than smuggled into a bug fix.
 
-| Endpoint | Orb table | Aspect hits |
+The two paths answered the same question — which transiting bodies aspect this
+natal chart — with two different orb tables. `calculateTransits` scanned
+`ASPECT_DEFS` (the natal table, §1.2); the overlay path behind
+`/api/v1/transit/natal` used `DEFAULT_TRANSIT_ORBS` (§1.3), 2–2.7× tighter.
+
+The cause was structural rather than careless: `DEFAULT_TRANSIT_ORBS` lived in
+`calculators/overlay.ts`, which `calculators/astrology.ts` cannot import
+without a runtime cycle. The natal table was the only one in reach.
+
+Measured (Diana's natal chart, transits for 2026-08-12 12:00 UTC,
+planet-to-planet pairs — the set `calculateTransits` computes):
+
+| Path | Orb table | Aspect hits |
 |---|---|---|
-| `/api/v1/transit` | natal (8/8/7/7/5/3) | **54** |
+| `/api/v1/astrology/transits`, before | natal (8/8/7/7/5/3) | **54** |
 | `/api/v1/transit/natal` | transit (3/3/3/2/2/1.5) | **18** |
+| `/api/v1/astrology/transits`, after | transit (3/3/3/2/2/1.5) | **18** |
 
-36 of the 54 — two thirds — are wider than the transit table permits, including
-a Sun–Moon opposition at 5.23° and a Sun–Venus square at 4.59°. A consumer
-switching endpoints sees the hit count triple with no documented reason, and
-`/api/v1/transit` additionally ignores the caller's `orbs` override because
-`ASPECT_DEFS` is a module constant.
+36 of the original 54 — two thirds — were wider than the transit table permits,
+including a Sun–Moon opposition at 5.23° and a Sun–Venus square at 4.59°. A
+consumer switching endpoints saw the hit count triple with no documented reason.
+The two paths now agree hit-for-hit, and a regression test asserts set equality
+in both directions with per-hit orb agreement to 9 decimal places, so the two
+cannot drift apart again without a test failing.
 
-Whichever table is right, both endpoints should use it. §1.3's stated
-convention is that transit-scale surfaces use the transit table, so on the
-convention as written `/api/v1/transit` is the one that is wrong.
+### F10 — `/api/v1/astrology/transits` reported `applying: false` unconditionally — **FIXED**
 
-### F10 — `/api/v1/transit` reports `applying: false` unconditionally
+**Resolved** by computing direction from relative motion in the same shared
+helper the overlay path uses, and by making the representation three-valued.
+The convention is now §1.5. (Same attribution correction as F9: the defective
+path is `/api/v1/astrology/transits`, not `/api/v1/transit`.)
 
-In the same loop, every pushed aspect carries a hardcoded `applying: false`.
-The transiting bodies' speeds are available on the objects being iterated, and
-the overlay path computes the flag correctly from them.
+In the same loop, every pushed aspect carried a hardcoded `applying: false`.
+The transiting bodies' speeds were available on the objects being iterated, and
+the overlay path already computed the flag correctly from them.
 
-Measured on the same request: **0 of 54** hits applying on `/api/v1/transit`,
-against **10 of 18** on `/api/v1/transit/natal`. Roughly half of all transit
-aspects are applying, so a blanket `false` is not a conservative default — it is
-a wrong answer on about half the list, and it is the half that matters most,
+Measured on the same request: **0 of 54** hits applying before, against **10 of
+18** on `/api/v1/transit/natal`. After the fix `/api/v1/astrology/transits`
+returns the same **10 applying, 8 separating**. Roughly half of all transit
+aspects are applying, so a blanket `false` was not a conservative default — it
+was a wrong answer on about half the list, and on the half that matters most,
 since an applying transit is the one that has not yet peaked.
 
 The field being present and always false is worse than the field being absent:
-absent is unknown, `false` is a claim.
+absent is unknown, `false` is a claim. That reasoning is what drove the
+representation as well as the fix. Where the bodies' relative speed is below
+tolerance, "applying" and "separating" are **both** false claims, so `motion`
+reports `"stationary"` and `applying` is omitted entirely — the same
+absent-rather-than-fabricated discipline taken for the Part of Fortune in F8.
+A three-valued `motion` was preferred over `applying: null` because `null` is
+routinely read as "no data" by consumers, which is precisely the case it is not.
+
+The regression tests were written against the plausible wrong fixes rather than
+the right one: a blanket `true` fails the mixed-outcome test; `applying = orb <
+threshold` fails a test that re-queries the ephemeris 15 minutes later and
+checks the orb actually moved the way the flag claimed; a tolerance widened
+until awkward cases fall into `"stationary"` fails a test asserting that two
+pairs at 0.0235 and 0.001 °/day are **not** stationary.
 
 ### F11 — every chart carries a tautological node–node opposition — **FIXED**
 

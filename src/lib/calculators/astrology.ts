@@ -14,6 +14,11 @@ import {
 import type { BirthData } from "../types/birth-data";
 import { detectAspectPatterns, type AspectPattern, type PatternPoint } from "./aspect-patterns";
 import {
+  DEFAULT_TRANSIT_ORBS,
+  MOTION_SAMPLE_DAYS,
+  STATIONARY_REL_SPEED_DEG_PER_DAY,
+} from "../constants/orbs";
+import {
   MODERN_RULERS,
   TRADITIONAL_RULERS,
   rulerOfSign,
@@ -189,13 +194,31 @@ const HIGH_LATITUDE_THRESHOLD = 66.5;
 
 export type AspectBody = PlanetName | "south_node";
 
+/**
+ * Which way an aspect is going, from the two bodies' relative motion.
+ *
+ * `"stationary"` means the bodies are not moving with respect to each other to
+ * within `STATIONARY_REL_SPEED_DEG_PER_DAY` — the aspect is doing neither thing,
+ * and saying "separating" would be a claim rather than an observation. See F10.
+ */
+export type AspectMotion = "applying" | "separating" | "stationary";
+
 export interface Aspect {
   from: AspectBody;
   to: AspectBody;
   type: "conjunction" | "opposition" | "trine" | "square" | "sextile" | "quincunx";
   exactAngle: number;
   orb: number;
-  applying: boolean;
+  /**
+   * True while the orb is tightening toward exact.
+   *
+   * **Optional.** Omitted (key absent) when `motion` is `"stationary"`, because
+   * a two-valued field cannot express a third answer and `false` there would
+   * read as "separating". Present whenever the direction is determinate.
+   */
+  applying?: boolean;
+  /** The three-valued form; always present. */
+  motion: AspectMotion;
 }
 
 const ASPECT_DEFS: { type: Aspect["type"]; angle: number; orb: number }[] = [
@@ -210,6 +233,54 @@ const ASPECT_DEFS: { type: Aspect["type"]; angle: number; orb: number }[] = [
 function angularDifference(a: number, b: number): number {
   const d = Math.abs(((a - b + 540) % 360) - 180);
   return d;
+}
+
+/**
+ * Direction of an aspect, from the RELATIVE motion of the two bodies.
+ *
+ * Sampled ~15 minutes ahead along both bodies' longitude speeds: if the
+ * separation is closer to exact then, the aspect is applying. When the two
+ * speeds differ by less than `STATIONARY_REL_SPEED_DEG_PER_DAY` the pair is not
+ * moving with respect to each other in any meaningful sense and the answer is
+ * `"stationary"` — a transiting body at its station, or two outer bodies
+ * momentarily locked in step, is doing neither thing.
+ *
+ * For transit-to-natal work the natal chart is a fixed moment, so the natal
+ * body's speed is 0 and the relative motion is the transiting body's own —
+ * which is exactly what makes a transiting station come out as `"stationary"`.
+ *
+ * A partile aspect (orb 0) with the bodies still moving comes out as
+ * `"separating"`: the next instant genuinely is wider. See §1.5.
+ *
+ * @returns The direction, or `"stationary"` when there is no meaningful one.
+ */
+export function aspectMotion(
+  longitudeA: number,
+  speedA: number,
+  longitudeB: number,
+  speedB: number,
+  exactAngle: number,
+  orb: number,
+): AspectMotion {
+  if (Math.abs(speedA - speedB) < STATIONARY_REL_SPEED_DEG_PER_DAY) return "stationary";
+  const sepFuture = angularDifference(
+    longitudeA + speedA * MOTION_SAMPLE_DAYS,
+    longitudeB + speedB * MOTION_SAMPLE_DAYS,
+  );
+  return Math.abs(sepFuture - exactAngle) < orb ? "applying" : "separating";
+}
+
+/**
+ * The `applying`/`motion` pair for an aspect payload, spread into the object.
+ *
+ * Spread rather than assigned so that a stationary aspect leaves `applying`
+ * genuinely ABSENT rather than present-and-undefined (the same distinction the
+ * Part of Fortune turns on — see F8).
+ */
+function motionFields(motion: AspectMotion): { applying?: boolean; motion: AspectMotion } {
+  return motion === "stationary"
+    ? { motion }
+    : { applying: motion === "applying", motion };
 }
 
 function houseFor(longitude: number, cusps: number[]): number {
@@ -296,19 +367,15 @@ export function computeAspects(planets: NatalPlanet[]): Aspect[] {
       for (const def of ASPECT_DEFS) {
         const orb = Math.abs(sep - def.angle);
         if (orb <= def.orb) {
-          // Applying = orbit will tighten toward exact aspect over the next ~15 minutes.
-          const sepFuture = angularDifference(
-            a.longitude + a.speed * 0.01,
-            b.longitude + b.speed * 0.01
-          );
-          const applying = Math.abs(sepFuture - def.angle) < orb;
           out.push({
             from: a.name,
             to: b.name,
             type: def.type,
             exactAngle: def.angle,
             orb,
-            applying,
+            ...motionFields(
+              aspectMotion(a.longitude, a.speed, b.longitude, b.speed, def.angle, orb),
+            ),
           });
           break;
         }
@@ -504,15 +571,28 @@ export function calculateTransits(input: TransitInput): TransitChart {
     for (const n of natalChart.planets) {
       const sep = angularDifference(t.longitude, n.longitude);
       for (const def of ASPECT_DEFS) {
+        // TRANSIT orbs, not the natal table this loop used to read off
+        // `ASPECT_DEFS`. Which orbs a transit is judged by is a property of the
+        // question, not of the URL the caller happened to reach for: this
+        // endpoint and `/api/v1/transit/natal` answer the same question and
+        // must answer it the same way (F9).
         const orb = Math.abs(sep - def.angle);
-        if (orb <= def.orb) {
+        if (orb <= DEFAULT_TRANSIT_ORBS[def.type]) {
           aspectsToNatal.push({
             from: t.name,
             to: n.name,
             type: def.type,
             exactAngle: def.angle,
             orb,
-            applying: false,
+            // Computed from relative motion, where this used to be a hardcoded
+            // `applying: false` on every hit — a wrong answer on roughly half
+            // the list, and the half that matters, since an applying transit is
+            // the one that has not yet peaked (F10). The natal chart is a fixed
+            // moment, so the natal body's speed is 0 and the relative motion is
+            // the transiting body's own.
+            ...motionFields(
+              aspectMotion(t.longitude, t.speed, n.longitude, 0, def.angle, orb),
+            ),
             fromTransit: true,
           });
           break;
